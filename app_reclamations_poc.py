@@ -12,7 +12,7 @@ from dateutil import parser as dtparser
 # =========================================================
 st.set_page_config(
     page_title="Suivi de Réclamation SGCI",
-    page_icon="🟦",
+    page_icon="🌈",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -49,7 +49,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.title("🟦 Suivi de Réclamation SGCI")
+st.title("🌈 Suivi de Réclamation SGCI")
 st.caption("Saisissez votre référence de réclamation pour suivre l’avancement. (Lecture seule)")
 
 
@@ -405,4 +405,5 @@ if search_clicked:
     #with st.expander("🔍 Debug POC (optionnel)"):
      #   st.write("SLA Réclamation (raw) :", data.get("SLA Réclamation"))
       #  st.write("Steps parsed :", steps)
+
 
