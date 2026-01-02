@@ -1,37 +1,110 @@
 
 import re
-import io
 import html
-from typing import Dict, Any, List, Optional, Tuple
-import pandas as pd
+from typing import Dict, Any, List, Optional
+
 import streamlit as st
 from dateutil import parser as dtparser
 
 
 # =========================================================
-# CONFIG APP
+# CONFIGURATION DE L'APPLICATION
 # =========================================================
-st.set_page_config(page_title="SGCI | POC Réclamations", page_icon="🟦", layout="wide")
+st.set_page_config(
+    page_title="Suivi de Réclamation SGCI",
+    page_icon="🟦",
+    layout="centered",
+    initial_sidebar_state="collapsed"
+)
 
-APP_TITLE = "🟦 SGCI | POC Suivi Réclamation (V0/V1)"
-APP_SUBTITLE = "V0 : données en dur | V1 : import Excel/CSV et recherche par Réf. Réclamation"
+st.markdown(
+    """
+    <style>
+      /* Réduction marges pour un rendu propre sur mobile */
+      .block-container { padding-top: 2rem; padding-bottom: 2rem; }
+      /* Légère amélioration des titres */
+      h1, h2, h3 { letter-spacing: -0.2px; }
+      /* Cards workflow */
+      .wf-card {
+        border-radius: 14px;
+        padding: 10px 10px;
+        text-align: center;
+        font-size: 0.85rem;
+        line-height: 1.2rem;
+        box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+        margin-bottom: 10px;
+      }
+      .wf-title { font-weight: 800; }
+      .wf-dur { opacity: 0.95; font-size: 0.78rem; margin-top: 4px; }
+      .muted { color: rgba(0,0,0,0.55); }
+      .pill {
+        display:inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 0.85rem;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.title("🟦 Suivi de Réclamation SGCI")
+st.caption("Saisissez votre référence de réclamation pour suivre l’avancement. (Lecture seule)")
 
 
 # =========================================================
-# WORKFLOW / STATUTS
+# DONNÉES SIMULÉES (POC) - À REMPLACER PAR BACKEND/API
+# =========================================================
+def fetch_reclamation_data(ref: str) -> Optional[Dict[str, Any]]:
+    """
+    Simule la récupération des données d'une réclamation.
+    En V1: remplacer par un appel API / DB / Excel.
+    """
+    reclamations_db = {
+        "SGCI-338245": {
+            "Filiale": "SGCI",
+            "Réf. Réclamation": "SGCI-338245",
+            "Date de création": "18-12-2024 13:16:36",
+            "Date dernière modification": "19-12-2024 11:00:00",
+            "Etat": "Valider Regularisation",
+            "Type": "Monetique",
+            "Activité": "Retrait GAB SG",
+            "Motif": "RETRAIT CONTESTE-NON RECONNU",
+            "Objet de la réclamation": "Retrait DAB contesté",
+            "Canal de réception": "Email",
+            "Agence": "00111-PLATEAU",
+            "Montant": "100000",
+            "Dévise du montant": "XOF",
+            "SLA Réclamation": "[REC - Etude Technique:10h 38m 16s, REC - Traitement Back:2d 10h 54m 1s, REC - En Régularisation:4d 10h 54m 52s]",
+        },
+        "SGCI-123456": {
+            "Filiale": "SGCI",
+            "Réf. Réclamation": "SGCI-123456",
+            "Date de création": "20-12-2024 09:00:00",
+            "Date dernière modification": "22-12-2024 15:30:00",
+            "Etat": "Traitement",
+            "Type": "Service",
+            "Activité": "Frais de tenue de compte",
+            "Motif": "AUTRES",
+            "Objet de la réclamation": "Frais de compte non justifiés",
+            "Canal de réception": "Agence",
+            "Agence": "00225-YAMOUSSOUKRO",
+            "Montant": "5000",
+            "Dévise du montant": "XOF",
+            "SLA Réclamation": "[REC - Traitement:1h 15m 0s, REC - SUPPORT:30m 0s]",
+        }
+    }
+    return reclamations_db.get(ref.strip().upper())
+
+
+# =========================================================
+# STATUTS / WORKFLOW
 # =========================================================
 STATUSES_ORDER = [
-    "SUPPORT",
-    "Traitement",
-    "Etude Technique",
-    "Infos complémentaires",
-    "Attente retour tiers",
-    "En cours de régularisation",
-    "Valider Regularisation",
-    "Traitée",
-    "A Terminer",
-    "Initialisation",
-    "Résolue",
+    "Initialisation", "SUPPORT", "Etude Technique", "Traitement", "Infos complémentaires",
+    "Attente retour tiers", "En cours de régularisation", "Valider Regularisation",
+    "Traitée", "A Terminer", "Résolue"
 ]
 
 STATUS_COLORS = {
@@ -48,439 +121,287 @@ STATUS_COLORS = {
     "Résolue": "#198754",
 }
 
-# Mapping des colonnes "Temps ..." => étapes
-TIME_COLUMNS_MAP = {
-    "Temps\nEtude Technique": "Etude Technique",
-    "Temps\nInfos complémentaires": "Infos complémentaires",
-    "Temps\nTraitement": "Traitement",
-    "Temps\nSUPPORT": "SUPPORT",
-    "Temps\nTraitée": "Traitée",
-    "Temps\nA Terminer": "A Terminer",
-    "Temps\nInitialisation": "Initialisation",
-    "Temps\nValider Regularisation": "Valider Regularisation",
-    "Temps\nEn cours de régularisation": "En cours de régularisation",
-    "Temps\nAttente retour tiers": "Attente retour tiers",
-}
-
-# Regex durée type: "2d 10h 54m 1s" ou "10h 38m 16s" ou "27 MI 45 S"
-DUR_DHMS_RE = re.compile(
-    r"(?:(?P<d>\d+)\s*d\s*)?"
-    r"(?:(?P<h>\d+)\s*h\s*)?"
-    r"(?:(?P<m>\d+)\s*m\s*)?"
-    r"(?:(?P<s>\d+)\s*s\s*)?$",
-    re.IGNORECASE
-)
-DUR_MI_S_RE = re.compile(r"(?:(?P<m>\d+)\s*mi\s*)?(?:(?P<s>\d+)\s*s\s*)?$", re.IGNORECASE)
-
 
 # =========================================================
-# UTILITAIRES (NETTOYAGE / DATES / DUREES)
+# UTILITAIRES (NETTOYAGE / DATES / DURÉES)
 # =========================================================
 def clean_html_spaces(x: Any) -> str:
-    """Nettoie les valeurs contenant '&nbsp;' ou \xa0."""
     if x is None:
         return ""
     s = str(x)
-    s = html.unescape(s)  # convertit &nbsp; etc.
+    s = html.unescape(s)
     s = s.replace("\xa0", " ").replace("\u00a0", " ")
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+    return re.sub(r"\s+", " ", s).strip()
 
-def parse_date_fr_maybe(x: Any) -> Optional[pd.Timestamp]:
-    """
-    Parse des dates type: '18-12-2024 13:16:36' (avec &nbsp; possiblement).
-    """
+def parse_date_fr_maybe(x: Any) -> Optional[str]:
     s = clean_html_spaces(x)
     if not s:
         return None
     try:
-        # dayfirst=True important pour format dd-mm-yyyy
         dt = dtparser.parse(s, dayfirst=True)
-        return pd.to_datetime(dt)
+        return dt.strftime("%d/%m/%Y à %H:%M")
     except Exception:
-        return None
+        return s
 
 def duration_to_seconds(x: Any) -> int:
     """
-    Convertit:
-      - '2d 10h 54m 1s'
-      - '10h 38m 16s'
-      - '27 MI 45 S'
-      - valeurs numériques (secondes) => int
+    Supporte:
+      - 2d 10h 54m 1s
+      - 10h 38m 16s
+      - 27 mi 45 s
+      - 30m 0s
     """
     if x is None:
         return 0
-    s = clean_html_spaces(x)
+    s = clean_html_spaces(x).lower()
     if not s:
         return 0
 
-    # Si numérique
-    if re.fullmatch(r"\d+(\.\d+)?", s):
-        return int(float(s))
+    # numérique direct
+    if re.fullmatch(r"\d+", s):
+        return int(s)
+
+    s_compact = s.replace(" ", "")
 
     # dhms
-    m = DUR_DHMS_RE.match(s.lower().replace(" ", ""))
+    m = re.fullmatch(r"(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?", s_compact)
     if m:
-        d = int(m.group("d") or 0)
-        h = int(m.group("h") or 0)
-        mi = int(m.group("m") or 0)
-        sec = int(m.group("s") or 0)
+        d, h, mi, sec = [int(v) if v else 0 for v in m.groups()]
         return d*86400 + h*3600 + mi*60 + sec
 
-    # format "MI S"
-    s2 = s.lower().replace(" ", "")
-    m2 = DUR_MI_S_RE.match(s2)
-    if m2 and (m2.group("m") or m2.group("s")):
-        mi = int(m2.group("m") or 0)
-        sec = int(m2.group("s") or 0)
+    # mi/s (ex: 27mi45s)
+    m2 = re.fullmatch(r"(?:(\d+)mi)?(?:(\d+)s)?", s_compact)
+    if m2:
+        mi, sec = [int(v) if v else 0 for v in m2.groups()]
         return mi*60 + sec
 
     return 0
 
 def seconds_to_human(seconds: int) -> str:
     if seconds <= 0:
-        return "—"
+        return "0s"
     d, rem = divmod(seconds, 86400)
     h, rem = divmod(rem, 3600)
     m, s = divmod(rem, 60)
     parts = []
-    if d: parts.append(f"{d}d")
+    if d: parts.append(f"{d}j")
     if h: parts.append(f"{h}h")
-    if m: parts.append(f"{m}m")
+    if m: parts.append(f"{m}min")
     if s: parts.append(f"{s}s")
-    return " ".join(parts) if parts else "—"
+    return " ".join(parts)
 
 
 # =========================================================
-# PARSING WORKFLOW: 1) depuis SLA Réclamation (string [REC - ...])
+# PARSING WORKFLOW (SLA Réclamation)
 # =========================================================
 def parse_workflow_from_sla(raw: Any) -> List[Dict[str, Any]]:
-    """
-    Parse:
-    [REC - Etude Technique:10h 38m 16s, REC - Traitement Back:2d 10h 54m 1s, ...]
-    """
     s = clean_html_spaces(raw).strip()
     s = s.strip("[]")
     if not s:
         return []
 
-    items = [x.strip() for x in s.split(",") if x.strip()]
-    out = []
-    for it in items:
-        if ":" not in it:
+    steps = []
+    for item in s.split(","):
+        item = item.strip()
+        if ":" not in item:
             continue
-        left, dur = it.split(":", 1)
-        step = left.replace("REC -", "").strip()
-        # normalise quelques variantes
-        step_lower = step.lower()
-        if "traitement back" in step_lower:
+        step, dur = item.split(":", 1)
+        step = step.replace("REC -", "").strip()
+
+        # normalisations métier
+        if "traitement back" in step.lower():
             step = "Traitement"
-        if "en régularisation" in step_lower or "en regularisation" in step_lower:
+        if "en régularisation" in step.lower() or "en regularisation" in step.lower():
             step = "En cours de régularisation"
+
         sec = duration_to_seconds(dur)
-        out.append({"step": step, "seconds": sec, "human": seconds_to_human(sec)})
-    return out
+        if sec > 0:
+            steps.append({"step": step, "seconds": sec, "human": seconds_to_human(sec)})
 
-def parse_workflow_from_time_columns(row: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Construit workflow à partir des colonnes Temps\n...
-    Les temps sont souvent fournis en secondes (ex 1303) ou minutes.
-    """
-    out = []
-    for col, step in TIME_COLUMNS_MAP.items():
-        if col in row:
-            sec = duration_to_seconds(row.get(col))
-            if sec > 0:
-                out.append({"step": step, "seconds": sec, "human": seconds_to_human(sec)})
-    # garder l'ordre logique du pipeline
-    out_sorted = sorted(out, key=lambda x: STATUSES_ORDER.index(x["step"]) if x["step"] in STATUSES_ORDER else 999)
-    return out_sorted
+    return steps
 
 
 # =========================================================
-# UI HELPERS
+# UI COMPONENTS
 # =========================================================
-def badge(text: str, color: str) -> str:
-    return f"""
-    <span style="background:{color};color:white;padding:6px 10px;border-radius:999px;
-                 font-weight:900;font-size:0.85rem;display:inline-block;">
-        {text}
-    </span>
-    """
+def pill_status(text: str) -> str:
+    color = STATUS_COLORS.get(text, "#6c757d")
+    return f'<span class="pill" style="background:{color};color:white;">{text}</span>'
+
+def chunk_list(lst: List[str], size: int) -> List[List[str]]:
+    return [lst[i:i+size] for i in range(0, len(lst), size)]
 
 def render_workflow(status: str, steps: List[Dict[str, Any]]):
-    st.subheader("🔄 Workflow & Durées")
+    st.markdown("### 🔄 Suivi du traitement")
 
-    # agrégation durées par step
-    sec_by = {}
+    if status not in STATUSES_ORDER:
+        st.warning("Le statut actuel n'est pas reconnu dans le référentiel.")
+        status_idx = -1
+    else:
+        status_idx = STATUSES_ORDER.index(status)
+
+    # durées par step
+    sec_by_step = {}
     for s in steps:
-        sec_by[s["step"]] = sec_by.get(s["step"], 0) + int(s["seconds"])
+        sec_by_step[s["step"]] = sec_by_step.get(s["step"], 0) + int(s["seconds"])
 
-    try:
-        current_idx = STATUSES_ORDER.index(status)
-    except ValueError:
-        current_idx = -1
+    # On affiche en lignes de 5 pour un rendu centré propre
+    rows = chunk_list(STATUSES_ORDER, 5)
 
-    cols = st.columns(len(STATUSES_ORDER))
-    for i, stt in enumerate(STATUSES_ORDER):
-        if current_idx == -1:
-            state = "future"
-        elif i < current_idx:
-            state = "done"
-        elif i == current_idx:
-            state = "current"
-        else:
-            state = "future"
+    for r in rows:
+        cols = st.columns(len(r))
+        for i, step_name in enumerate(r):
+            global_index = STATUSES_ORDER.index(step_name)
 
-        bg = "#198754" if state == "done" else ("#ffc107" if state == "current" else "#e9ecef")
-        fg = "#fff" if state in ("done", "current") else "#343a40"
-        dur = seconds_to_human(sec_by.get(stt, 0)) if sec_by.get(stt, 0) else "—"
+            if status_idx == -1:
+                state = "future"
+            elif global_index < status_idx:
+                state = "done"
+            elif global_index == status_idx:
+                state = "current"
+            else:
+                state = "future"
 
-        cols[i].markdown(
-            f"""
-            <div style="padding:10px;border-radius:14px;background:{bg};color:{fg};text-align:center;">
-              <div style="font-weight:900;">{stt}</div>
-              <div style="font-size:0.85rem;">{dur}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+            if state == "done":
+                bg = "#198754"
+                fg = "white"
+                icon = "✅"
+            elif state == "current":
+                bg = "#ffc107"
+                fg = "#1f2d3d"
+                icon = "⏳"
+            else:
+                bg = "#f1f3f5"
+                fg = "#343a40"
+                icon = "•"
 
-    # tableau des durées
+            dur = seconds_to_human(sec_by_step.get(step_name, 0)) if sec_by_step.get(step_name, 0) else "—"
+
+            cols[i].markdown(
+                f"""
+                <div class="wf-card" style="background:{bg};color:{fg};">
+                  <div class="wf-title">{icon} {step_name}</div>
+                  <div class="wf-dur">{dur}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    # Tableau détail
     if steps:
-        df_steps = pd.DataFrame(steps)
-        df_steps = df_steps.groupby("step", as_index=False)["seconds"].sum()
-        df_steps["durée"] = df_steps["seconds"].apply(seconds_to_human)
-        df_steps = df_steps.sort_values("seconds", ascending=False)
+        st.markdown("#### ⏱️ Détail des durées")
+        # agrégation et tri
+        agg = {}
+        for s in steps:
+            agg[s["step"]] = agg.get(s["step"], 0) + int(s["seconds"])
+        detail = [{"Étape": k, "Durée": seconds_to_human(v), "Secondes": v} for k, v in agg.items()]
+        detail = sorted(detail, key=lambda x: x["Secondes"], reverse=True)
 
-        total_sec = int(df_steps["seconds"].sum())
-        st.caption(f"⏱️ Durée totale (somme des étapes connues) : **{seconds_to_human(total_sec)}**")
-        st.dataframe(df_steps[["step", "durée", "seconds"]], use_container_width=True, hide_index=True)
+        total = sum(x["Secondes"] for x in detail)
+        st.caption(f"Durée totale cumulée (selon étapes disponibles) : **{seconds_to_human(total)}**")
+        st.dataframe(detail, use_container_width=True, hide_index=True)
     else:
-        st.info("Aucune durée d’étape disponible.")
+        st.info("Aucune information de durée disponible pour cette réclamation.")
 
 
 # =========================================================
-# V0 : DONNEES EN DUR
+# MAIN - UI CLIENT
 # =========================================================
-def load_v0_data() -> pd.DataFrame:
-    sample = {
-        "Filiale": "SGCI",
-        "Réf. Réclamation": "SGCI-338245",
-        "Créateur": "Amoin Ange Marie KONAN",
-        "Date de création": "18-12-2024 13:16:36",
-        "Date dernière modification": "18-12-2024 13:39:21",
-        "Groupe de résolution": "SGCI PMON Reclamation Group",
-        "Etat": "Valider Regularisation",
-        "Type": "Monetique",
-        "Activité": "Retrait GAB SG",
-        "Motif": "RETRAIT CONTESTE-NON RECONNU",
-        "Objet de la réclamation": "retrait DAB contesté",
-        "Caractère de la réclamation": "Non fondée",
-        "Canal de réception": "Email",
-        "Durée de traitement (En J)": "27 MI 45 S",
-        "Client": "[500505275] POUDIOUGO JACOB",
-        "Agence": "00111-PLATEAU",
-        "Segment": "10103",
-        "Typologie": "Operations non autorisées",
-        "Numéro de la carte": "454436******9225",
-        "Montant": "100000",
-        "Dévise du montant": "XOF",
-        "SLA Réclamation": "[REC - Etude Technique:10h 38m 16s, REC - Traitement Back:2d 10h 54m 1s, REC - En Régularisation:4d 10h 54m 52s]",
-        "Temps\nEtude Technique": "1303",
-        "Temps\nTraitement": "51",
-        "Temps\nValider Regularisation": "3",
-        "Temps\nEn cours de régularisation": "307",
-    }
-    df = pd.DataFrame([sample])
-    return df
+st.markdown("#### 🔎 Rechercher ma réclamation")
+ref = st.text_input("Référence de réclamation", placeholder="Ex : SGCI-338245").strip()
 
+col_btn1, col_btn2 = st.columns([1, 1])
+with col_btn1:
+    search_clicked = st.button("Rechercher", type="primary", use_container_width=True)
+with col_btn2:
+    reset_clicked = st.button("Réinitialiser", use_container_width=True)
 
-# =========================================================
-# V1 : IMPORT EXCEL/CSV
-# =========================================================
-EXPECTED_KEY_COL = "Réf. Réclamation"
+if reset_clicked:
+    st.rerun()
 
-def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    - Nettoie les noms de colonnes (garde les retours ligne si présents)
-    - Ajoute colonnes manquantes (sans planter)
-    - Convertit dates
-    """
-    df = df.copy()
-
-    # Nettoyage de base des colonnes (conserve '\n' dans "Temps\n...")
-    df.columns = [clean_html_spaces(c).replace("\r", "") for c in df.columns]
-
-    # Normalise colonnes temps: parfois "Temps Etude Technique" sans \n
-    # => on crée une correspondance tolérante
-    rename_map = {}
-    for c in df.columns:
-        c_norm = c.replace("Temps ", "Temps\n").replace("Temps\t", "Temps\n")
-        # exemple: "Temps Etude Technique" -> "Temps\nEtude Technique"
-        if c.startswith("Temps ") and "\n" not in c:
-            rename_map[c] = c_norm
-    if rename_map:
-        df = df.rename(columns=rename_map)
-
-    # dates
-    if "Date de création" in df.columns:
-        df["Date de création"] = df["Date de création"].apply(parse_date_fr_maybe)
-    if "Date dernière modification" in df.columns:
-        df["Date dernière modification"] = df["Date dernière modification"].apply(parse_date_fr_maybe)
-
-    return df
-
-@st.cache_data(show_spinner=False)
-def load_v1_file(uploaded) -> pd.DataFrame:
-    name = uploaded.name.lower()
-    if name.endswith(".csv"):
-        df = pd.read_csv(uploaded)
-    else:
-        df = pd.read_excel(uploaded, engine="openpyxl")
-    return standardize_columns(df)
-
-
-# =========================================================
-# APP UI
-# =========================================================
-st.title(APP_TITLE)
-st.caption(APP_SUBTITLE)
-
-with st.sidebar:
-    st.header("⚙️ Mode")
-    mode = st.radio("Choisir la version", ["V0 (valeurs en dur)", "V1 (import Excel/CSV)"], index=0)
-
-    st.divider()
-    st.header("🔎 Recherche")
-    ref = st.text_input("Réf. Réclamation", placeholder="Ex: SGCI-338245")
-
-    st.divider()
-    st.header("ℹ️ Aide")
-    st.write("Workflow prioritaire : colonne **SLA Réclamation** si elle contient `[REC - ...]`.")
-    st.write("Sinon, utilisation des colonnes **Temps\\n...** si présentes.")
-
-# Charger data selon mode
-if mode == "V0 (valeurs en dur)":
-    df = load_v0_data()
-else:
-    uploaded = st.file_uploader("Importer un fichier Excel/CSV (V1)", type=["xlsx", "xls", "csv"])
-    if uploaded is None:
-        st.info("➡️ Importer un fichier Excel/CSV pour activer la V1.")
+if search_clicked:
+    if not ref:
+        st.warning("Merci de saisir une référence de réclamation.")
         st.stop()
-    df = load_v1_file(uploaded)
 
-# Vérifier existence colonne clé
-if EXPECTED_KEY_COL not in df.columns:
-    st.error(f"Colonne clé manquante : **{EXPECTED_KEY_COL}**")
-    st.caption("Colonnes détectées : " + ", ".join(df.columns[:80]) + (" ..." if len(df.columns) > 80 else ""))
-    st.stop()
+    data = fetch_reclamation_data(ref)
+    if not data:
+        st.error("Réclamation introuvable. Vérifiez la référence saisie.")
+        st.stop()
 
-if not ref:
-    st.info("➡️ Saisis une référence de réclamation dans la sidebar.")
-    st.stop()
+    # Extraction champs (client-safe : pas de nom / compte affiché)
+    ref_out = clean_html_spaces(data.get("Réf. Réclamation"))
+    filiale = clean_html_spaces(data.get("Filiale"))
+    etat = clean_html_spaces(data.get("Etat"))
+    type_rec = clean_html_spaces(data.get("Type"))
+    activite = clean_html_spaces(data.get("Activité"))
+    motif = clean_html_spaces(data.get("Motif"))
+    objet = clean_html_spaces(data.get("Objet de la réclamation"))
+    canal = clean_html_spaces(data.get("Canal de réception"))
+    agence = clean_html_spaces(data.get("Agence"))
+    montant = clean_html_spaces(data.get("Montant"))
+    devise = clean_html_spaces(data.get("Dévise du montant"))
 
-# Lookup
-match = df[df[EXPECTED_KEY_COL].astype(str).str.strip() == ref.strip()]
-if match.empty:
-    st.warning("Réclamation introuvable dans le fichier.")
-    st.caption("Aperçu des 20 dernières lignes :")
-    st.dataframe(df.tail(20), use_container_width=True, hide_index=True)
-    st.stop()
+    created = parse_date_fr_maybe(data.get("Date de création")) or "—"
+    updated = parse_date_fr_maybe(data.get("Date dernière modification")) or "—"
 
-row = match.iloc[0].to_dict()
-
-# Champs principaux (tolérants)
-filiale = row.get("Filiale", "")
-etat = row.get("Etat", row.get("État", row.get("Etat ", "")))
-type_rec = row.get("Type", "")
-activite = row.get("Activité", "")
-motif = row.get("Motif", "")
-client = row.get("Client", "")
-compte = row.get("Numéro de compte", "")
-agence = row.get("Agence", "")
-segment = row.get("Segment", "")
-canal = row.get("Canal de réception", "")
-objet = row.get("Objet de la réclamation", "")
-montant = clean_html_spaces(row.get("Montant", ""))
-devise = clean_html_spaces(row.get("Dévise du montant", ""))
-
-created_at = row.get("Date de création", None)
-updated_at = row.get("Date dernière modification", None)
-
-# Statut/Etat -> on aligne sur workflow
-status = clean_html_spaces(etat)
-if status not in STATUSES_ORDER:
-    # tentative de normalisation simple
-    if "regular" in status.lower():
-        status = "Valider Regularisation" if "valider" in status.lower() else "En cours de régularisation"
-    elif "support" in status.lower():
-        status = "SUPPORT"
-    elif "trait" in status.lower():
-        status = "Traitement"
-    else:
-        # si inconnu, on le garde mais il ne sera pas positionné correctement
+    # normaliser statut
+    status = etat
+    if "en régularisation" in status.lower() or "en regularisation" in status.lower():
+        status = "En cours de régularisation"
+    if status not in STATUSES_ORDER:
+        # garde le statut tel quel, mais le workflow ne pourra pas le positionner précisément
         pass
 
-# Workflow: prioritaire SLA Réclamation
-sla_raw = row.get("SLA Réclamation", "")
-steps = parse_workflow_from_sla(sla_raw)
+    # workflow
+    steps = parse_workflow_from_sla(data.get("SLA Réclamation"))
 
-# fallback: colonnes Temps...
-if not steps:
-    steps = parse_workflow_from_time_columns(row)
+    st.divider()
 
-# UI Header
-st.markdown("## 🧾 Dossier Réclamation")
+    # Bandeau récap
+    st.markdown("### 🧾 Résumé de la réclamation")
+    a, b, c = st.columns(3)
+    with a:
+        st.markdown("**Référence**")
+        st.write(ref_out or ref)
+        if filiale:
+            st.caption(f"Filiale : **{filiale}**")
+    with b:
+        st.markdown("**Date de création**")
+        st.write(created)
+        st.markdown("**Dernière mise à jour**")
+        st.write(updated)
+    with c:
+        st.markdown("**Statut actuel**")
+        st.markdown(pill_status(status), unsafe_allow_html=True)
 
-c1, c2, c3, c4 = st.columns([1.4, 1.2, 1.2, 1.2])
-with c1:
-    st.markdown("### Référence")
-    st.write(ref)
-    if filiale:
-        st.caption(f"Filiale : **{filiale}**")
-with c2:
-    st.markdown("### Création")
-    st.write(created_at)
-with c3:
-    st.markdown("### Dernière modification")
-    st.write(updated_at)
-with c4:
-    st.markdown("### Statut / Etat")
-    col = STATUS_COLORS.get(status, "#6c757d")
-    st.markdown(badge(status, col), unsafe_allow_html=True)
+    st.divider()
 
-st.divider()
+    # Détails essentiels (sans PII)
+    st.markdown("### 📌 Détails")
+    d1, d2 = st.columns(2)
+    with d1:
+        st.write(f"**Type :** {type_rec or '—'}")
+        st.write(f"**Activité :** {activite or '—'}")
+        st.write(f"**Motif :** {motif or '—'}")
+        st.write(f"**Canal :** {canal or '—'}")
+    with d2:
+        st.write(f"**Agence :** {agence or '—'}")
+        st.write(f"**Objet :** {objet or '—'}")
+        if montant:
+            st.write(f"**Montant :** {montant} {devise}".strip())
+        else:
+            st.write("**Montant :** —")
 
-# Bloc infos (métier)
-left, right = st.columns([1.6, 1.0])
+    st.divider()
 
-with left:
-    st.subheader("📌 Informations clés")
-    st.write(f"**Type :** {type_rec or '—'}")
-    st.write(f"**Activité :** {activite or '—'}")
-    st.write(f"**Motif :** {motif or '—'}")
-    if objet:
-        st.write(f"**Objet :** {objet}")
-    if canal:
-        st.write(f"**Canal :** {canal}")
+    # Workflow
+    render_workflow(status=status, steps=steps)
 
-with right:
-    st.subheader("💳 Contexte")
-    st.write(f"**Client :** {client or '—'}")
-    st.write(f"**Numéro de compte :** {compte or '—'}")
-    st.write(f"**Agence :** {agence or '—'}")
-    st.write(f"**Segment :** {segment or '—'}")
-    if montant:
-        st.write(f"**Montant :** {montant} {devise}".strip())
+    # Note client-safe
+    st.info("🔒 Pour protéger vos données, cette page n’affiche aucune information personnelle (nom, compte, téléphone).")
 
-st.divider()
-
-# Workflow
-render_workflow(status=status, steps=steps)
-
-# Détails raw pour debug POC
-with st.expander("🔍 Debug POC (valeurs brutes)"):
-    st.write("SLA Réclamation (raw) :", sla_raw)
-    st.write("Steps parsed :", steps)
-    st.write("Colonnes temps détectées :", [c for c in row.keys() if str(c).startswith("Temps")])
+    # Debug POC
+    with st.expander("🔍 Debug POC (optionnel)"):
+        st.write("SLA Réclamation (raw) :", data.get("SLA Réclamation"))
+        st.write("Steps parsed :", steps)
