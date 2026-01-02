@@ -402,6 +402,7 @@ if search_clicked:
     st.info("🔒 Pour protéger vos données, cette page n’affiche aucune information personnelle (nom, compte, téléphone).")
 
     # Debug POC
-    with st.expander("🔍 Debug POC (optionnel)"):
-        st.write("SLA Réclamation (raw) :", data.get("SLA Réclamation"))
-        st.write("Steps parsed :", steps)
+    #with st.expander("🔍 Debug POC (optionnel)"):
+     #   st.write("SLA Réclamation (raw) :", data.get("SLA Réclamation"))
+      #  st.write("Steps parsed :", steps)
+
