@@ -1,440 +1,235 @@
 import re
 import html
-import json
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
-import time
-
+from typing import Dict, Any, List, Optional
 import streamlit as st
 from dateutil import parser as dtparser
 
+
 # =========================================================
-# CONFIGURATION
+# CONFIGURATION DE L'APPLICATION
 # =========================================================
 st.set_page_config(
-    page_title="Suivi de Réclamation | SGCI",
-    page_icon="📋",
-    layout="wide",
+    page_title="Suivi de Réclamation SGCI",
+    page_icon="🆑",
+    layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# =========================================================
-# STYLE CSS PREMIUM OPTIMISÉ
-# =========================================================
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-    
-    * {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    .stApp {
-        background: linear-gradient(135deg, #f9fafb 0%, #f0f2f5 100%);
-    }
-    
-    /* Header Premium */
-    .header-premium {
-        background: linear-gradient(135deg, #D50032 0%, #B0002A 100%);
-        padding: 1.5rem 0;
-        margin-bottom: 3rem;
-        box-shadow: 0 8px 32px rgba(213, 0, 50, 0.2);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .header-premium::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
-        animation: shine 3s infinite;
-    }
-    
-    @keyframes shine {
-        0% { transform: translateX(-100%); }
-        100% { transform: translateX(100%); }
-    }
-    
-    /* Cards Modernes */
-    .card-modern {
-        background: white;
-        border-radius: 20px;
-        padding: 2rem;
-        margin: 1.5rem 0;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
-        border: 1px solid rgba(213, 0, 50, 0.1);
+# Logo SGCI
+logo_url = "https://particuliers.societegenerale.ci/fileadmin/user_upload/logos/SGBCI103_2025.svg"
+
+st.markdown(
+    f"""
+    <style>
+      /* Réduction marges pour un rendu propre sur mobile */
+      .block-container {{ padding-top: 1.5rem; padding-bottom: 1.5rem; }}
+      
+      /* Thème rouge, noir, blanc */
+      :root {{
+        --sg-red: #CC0000;
+        --sg-black: #000000;
+        --sg-white: #FFFFFF;
+        --sg-gray: #F5F5F5;
+        --sg-dark-gray: #333333;
+      }}
+      
+      /* Amélioration des titres avec thème SG */
+      h1, h2, h3 {{ 
+        letter-spacing: -0.2px;
+        color: var(--sg-black);
+      }}
+      h1 {{ color: var(--sg-red); }}
+      
+      /* Cards workflow améliorées */
+      .wf-card {{
+        border-radius: 12px;
+        padding: 12px 8px;
+        text-align: center;
+        font-size: 0.85rem;
+        line-height: 1.2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 12px;
+        border: 1px solid #E0E0E0;
         transition: all 0.3s ease;
-    }
-    
-    .card-modern:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
-        border-color: rgba(213, 0, 50, 0.2);
-    }
-    
-    /* Boutons Premium */
-    .stButton > button {
-        background: linear-gradient(135deg, #D50032 0%, #B0002A 100%);
+      }}
+      .wf-card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      }}
+      .wf-title {{ font-weight: 700; font-size: 0.9rem; }}
+      .wf-dur {{ opacity: 0.8; font-size: 0.75rem; margin-top: 4px; font-weight: 500; }}
+      
+      /* Pastilles améliorées */
+      .pill {{
+        display:inline-block;
+        padding: 8px 14px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }}
+      
+      /* Bloc suivi de traitement */
+      .suivi-bloc {{
+        background: linear-gradient(135deg, var(--sg-white) 0%, var(--sg-gray) 100%);
+        border-radius: 16px;
+        padding: 20px;
+        margin: 20px 0;
+        border: 1px solid rgba(204, 0, 0, 0.2);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      }}
+      
+      .caractere-urgent {{
+        background-color: #FFE5E5;
+        color: var(--sg-red);
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-weight: 700;
+        display: inline-block;
+        margin: 10px 0;
+        border-left: 4px solid var(--sg-red);
+      }}
+      
+      /* Boutons améliorés */
+      .stButton > button {{
+        background-color: var(--sg-red);
         color: white;
         border: none;
-        padding: 12px 28px;
-        border-radius: 50px;
+        border-radius: 8px;
+        padding: 12px 24px;
         font-weight: 600;
-        font-size: 15px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 6px 20px rgba(213, 0, 50, 0.3);
-        width: 100%;
-    }
-    
-    .stButton > button:hover {
+        transition: all 0.3s ease;
+      }}
+      .stButton > button:hover {{
+        background-color: #B30000;
         transform: translateY(-2px);
-        box-shadow: 0 10px 30px rgba(213, 0, 50, 0.4);
-        background: linear-gradient(135deg, #B0002A 0%, #900022 100%);
-    }
-    
-    /* Input Fields améliorés */
-    .stTextInput > div > div > input {
+      }}
+      
+      /* Avis section */
+      .avis-section {{
+        background: linear-gradient(135deg, #FFF9F9 0%, #FFEFEF 100%);
+        border-radius: 16px;
+        padding: 24px;
+        margin: 24px 0;
+        border: 2px solid var(--sg-red);
+      }}
+      
+      /* Contact info */
+      .contact-info {{
+        background-color: var(--sg-gray);
+        padding: 16px;
         border-radius: 12px;
-        border: 2px solid #e5e7eb;
-        padding: 14px 18px;
-        font-size: 15px;
-        transition: all 0.3s ease;
-        background: white;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    }
-    
-    .stTextInput > div > div > input:focus {
-        border-color: #D50032;
-        box-shadow: 0 0 0 3px rgba(213, 0, 50, 0.1);
-    }
-    
-    /* TIMELINE EXACTE COMME L'IMAGE */
-    .timeline-simple {
-        position: relative;
-        padding: 40px 0 60px 0;
-        margin: 2rem 0;
-    }
-    
-    .timeline-line {
-        position: absolute;
-        top: 30px;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: linear-gradient(90deg, 
-            #28a745 0%, 
-            #28a745 var(--progress, 0%), 
-            #e5e7eb var(--progress, 0%), 
-            #e5e7eb 100%);
-        z-index: 1;
-    }
-    
-    .timeline-step {
-        position: relative;
-        z-index: 2;
-        display: inline-block;
-        width: 20%;
+        margin-top: 20px;
         text-align: center;
-        vertical-align: top;
-    }
-    
-    .timeline-point {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: #e5e7eb;
-        border: 3px solid white;
-        margin: 0 auto 12px;
-        position: relative;
-        z-index: 3;
-        transition: all 0.3s ease;
-        box-shadow: 0 0 0 0 rgba(213, 0, 50, 0);
-    }
-    
-    .timeline-point.completed {
-        background: #28a745;
-        border-color: white;
-        box-shadow: 0 0 0 4px rgba(40, 167, 69, 0.2);
-    }
-    
-    .timeline-point.active {
-        background: #D50032;
-        border-color: white;
-        box-shadow: 0 0 0 4px rgba(213, 0, 50, 0.3);
-        animation: pulse-active 2s infinite;
-    }
-    
-    @keyframes pulse-active {
-        0%, 100% {
-            box-shadow: 0 0 0 4px rgba(213, 0, 50, 0.3);
-        }
-        50% {
-            box-shadow: 0 0 0 8px rgba(213, 0, 50, 0.1);
-        }
-    }
-    
-    .timeline-label {
-        font-size: 12px;
-        font-weight: 600;
-        color: #6b7280;
-        margin-top: 8px;
-        line-height: 1.3;
-        padding: 0 5px;
-        transition: all 0.3s ease;
-    }
-    
-    .timeline-label.active {
-        color: #D50032;
-        font-weight: 700;
-        transform: scale(1.05);
-    }
-    
-    .timeline-label.completed {
-        color: #28a745;
-    }
-    
-    /* Système d'étoiles FLUIDE */
-    .stars-container {
-        display: flex;
-        justify-content: center;
-        gap: 4px;
-        margin: 25px 0 15px;
-    }
-    
-    .star {
-        font-size: 40px;
-        cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        color: #e5e7eb;
-        line-height: 1;
-        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-    }
-    
-    .star:hover {
-        transform: scale(1.2);
-    }
-    
-    .star.selected {
-        color: #ffc107;
-        transform: scale(1.1);
-        filter: drop-shadow(0 0 15px rgba(255, 193, 7, 0.4));
-    }
-    
-    .star-rating-text {
+        border: 1px solid #DDD;
+      }}
+      
+      /* Logo container */
+      .logo-container {{
         text-align: center;
-        font-size: 18px;
-        font-weight: 600;
-        color: #374151;
-        margin-top: 10px;
-    }
+        margin-bottom: 20px;
+      }}
+      
+      .logo-container img {{
+        max-width: 180px;
+        height: auto;
+      }}
+    </style>
     
-    /* Badges modernes */
-    .badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 6px 16px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.3px;
-        text-transform: uppercase;
-        gap: 6px;
-    }
-    
-    .badge-primary {
-        background: linear-gradient(135deg, rgba(213, 0, 50, 0.1), rgba(213, 0, 50, 0.15));
-        color: #D50032;
-        border: 1.5px solid rgba(213, 0, 50, 0.2);
-    }
-    
-    .badge-success {
-        background: linear-gradient(135deg, rgba(40, 167, 69, 0.1), rgba(40, 167, 69, 0.15));
-        color: #28a745;
-        border: 1.5px solid rgba(40, 167, 69, 0.2);
-    }
-    
-    /* Layout amélioré */
-    .info-section {
-        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        padding: 1.5rem;
-        border-radius: 16px;
-        margin: 1rem 0;
-        border: 1px solid #e2e8f0;
-    }
-    
-    .info-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 10px 0;
-        border-bottom: 1px solid #f1f5f9;
-    }
-    
-    .info-item:last-child {
-        border-bottom: none;
-    }
-    
-    .info-label {
-        font-weight: 600;
-        color: #4b5563;
-        font-size: 14px;
-    }
-    
-    .info-value {
-        color: #1f2937;
-        font-weight: 500;
-        font-size: 14px;
-        text-align: right;
-        max-width: 60%;
-    }
-    
-    /* Contact Card améliorée */
-    .contact-card-premium {
-        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-        border-radius: 20px;
-        padding: 2.5rem;
-        color: white;
-        text-align: center;
-        margin: 2.5rem 0;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .contact-card-premium::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        left: -50%;
-        width: 200%;
-        height: 200%;
-        background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
-        animation: rotate-slow 30s linear infinite;
-    }
-    
-    @keyframes rotate-slow {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-    
-    .phone-number-premium {
-        font-size: 2.8rem;
-        font-weight: 900;
-        margin: 1.5rem 0;
-        letter-spacing: 1px;
-        position: relative;
-        z-index: 2;
-        background: linear-gradient(135deg, #ffffff 0%, #e5e7eb 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    }
-    
-    /* Progress Circle */
-    .progress-circle {
-        width: 120px;
-        height: 120px;
-        margin: 0 auto 2rem;
-        position: relative;
-    }
-    
-    .progress-circle svg {
-        width: 100%;
-        height: 100%;
-        transform: rotate(-90deg);
-    }
-    
-    .progress-circle-bg {
-        fill: none;
-        stroke: #e5e7eb;
-        stroke-width: 8;
-    }
-    
-    .progress-circle-fill {
-        fill: none;
-        stroke: #D50032;
-        stroke-width: 8;
-        stroke-linecap: round;
-        stroke-dasharray: 314;
-        stroke-dashoffset: calc(314 - (314 * var(--progress)) / 100);
-        transition: stroke-dashoffset 1.5s ease;
-    }
-    
-    .progress-circle-text {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 28px;
-        font-weight: 800;
-        color: #D50032;
-    }
-    
-    /* Success Message amélioré */
-    .success-message-premium {
-        background: linear-gradient(135deg, rgba(40, 167, 69, 0.08), rgba(40, 167, 69, 0.04));
-        border: 2px solid rgba(40, 167, 69, 0.3);
-        padding: 1.5rem;
-        border-radius: 16px;
-        margin: 2rem 0;
-        color: #28a745;
-        font-weight: 600;
-        animation: slide-in-right 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
-    
-    @keyframes slide-in-right {
-        from {
-            opacity: 0;
-            transform: translateX(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(0);
-        }
-    }
-    
-    /* Animation fade-in */
-    @keyframes fade-in-up {
-        from {
-            opacity: 0;
-            transform: translateY(30px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    .fade-in-up {
-        animation: fade-in-up 0.6s ease-out;
-    }
-</style>
-""", unsafe_allow_html=True)
+    <div class="logo-container">
+      <img src="{logo_url}" alt="SGCI Logo">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # =========================================================
-# INITIALISATION SESSION
+# DONNÉES SIMULÉES AVEC CARACTÈRE DE LA RÉCLAMATION
 # =========================================================
-if 'feedback_data' not in st.session_state:
-    st.session_state.feedback_data = {}
-if 'current_reference' not in st.session_state:
-    st.session_state.current_reference = None
-if 'current_rating' not in st.session_state:
-    st.session_state.current_rating = {}
-if 'hover_star' not in st.session_state:
-    st.session_state.hover_star = 0
+def fetch_reclamation_data(ref: str) -> Optional[Dict[str, Any]]:
+    """
+    Simule la récupération des données d'une réclamation.
+    En V1: remplacer par un appel API / DB / Excel.
+    """
+    reclamations_db = {
+        "SGCI-338245": {
+            "Filiale": "SGCI",
+            "Réf. Réclamation": "SGCI-338245",
+            "Date de création": "18-12-2024 13:16:36",
+            "Date dernière modification": "19-12-2024 11:00:00",
+            "Etat": "Valider Regularisation",
+            "Type": "Monetique",
+            "Activité": "Retrait GAB SG",
+            "Motif": "RETRAIT CONTESTE-NON RECONNU",
+            "Objet de la réclamation": "Retrait DAB contesté",
+            "Caractère": "Urgente",  # Nouveau champ
+            "Agence": "00111-PLATEAU",
+            "Montant": "100000",
+            "Dévise du montant": "XOF",
+            "SLA Réclamation": "[REC - Etude Technique:10h 38m 16s, REC - Traitement Back:2d 10h 54m 1s, REC - En Régularisation:4d 10h 54m 52s]",
+        },
+        "SGCI-123456": {
+            "Filiale": "SGCI",
+            "Réf. Réclamation": "SGCI-123456",
+            "Date de création": "20-12-2024 09:00:00",
+            "Date dernière modification": "22-12-2024 15:30:00",
+            "Etat": "A Terminer",
+            "Type": "Service",
+            "Activité": "Frais de tenue de compte",
+            "Motif": "AUTRES",
+            "Objet de la réclamation": "Frais de compte non justifiés",
+            "Caractère": "Non fondé",  # Nouveau champ
+            "Agence": "00225-YAMOUSSOUKRO",
+            "Montant": "5000",
+            "Dévise du montant": "XOF",
+            "SLA Réclamation": "[REC - Traitement:1h 15m 0s, REC - SUPPORT:30m 0s]",
+        },
+        "SGCI-789012": {
+            "Filiale": "SGCI",
+            "Réf. Réclamation": "SGCI-789012",
+            "Date de création": "15-01-2025 10:30:00",
+            "Date dernière modification": "20-01-2025 14:45:00",
+            "Etat": "Résolue",
+            "Type": "Service",
+            "Activité": "Problème de carte",
+            "Motif": "CARTE PERDUE",
+            "Objet de la réclamation": "Remplacement carte perdue",
+            "Caractère": "",  # Champ vide
+            "Agence": "00300-ABIDJAN",
+            "Montant": "15000",
+            "Dévise du montant": "XOF",
+            "SLA Réclamation": "[REC - Initialisation:1h 0m 0s, REC - Traitement:2d 5h 30m 0s]",
+        }
+    }
+    return reclamations_db.get(ref.strip().upper())
+
 
 # =========================================================
-# FONCTIONS UTILITAIRES OPTIMISÉES
+# STATUTS / WORKFLOW
+# =========================================================
+STATUSES_ORDER = [
+    "Initialisation", "SUPPORT", "Etude Technique", "Traitement", "Infos complémentaires",
+    "Attente retour tiers", "En cours de régularisation", "Valider Regularisation",
+    "Traitée", "A Terminer", "Résolue"
+]
+
+STATUS_COLORS = {
+    "SUPPORT": "#6c757d",
+    "Traitement": "#0d6efd",
+    "Etude Technique": "#6610f2",
+    "Infos complémentaires": "#20c997",
+    "Attente retour tiers": "#fd7e14",
+    "En cours de régularisation": "#ffc107",
+    "Valider Regularisation": "#198754",
+    "Traitée": "#0dcaf0",
+    "A Terminer": "#CC0000",  # Rouge SGCI
+    "Initialisation": "#343a40",
+    "Résolue": "#198754",
+}
+
+
+# =========================================================
+# UTILITAIRES
 # =========================================================
 def clean_html_spaces(x: Any) -> str:
     if x is None:
@@ -444,660 +239,435 @@ def clean_html_spaces(x: Any) -> str:
     s = s.replace("\xa0", " ").replace("\u00a0", " ")
     return re.sub(r"\s+", " ", s).strip()
 
-def parse_date_fr(x: Any) -> Optional[str]:
+def parse_date_fr_maybe(x: Any) -> Optional[str]:
     s = clean_html_spaces(x)
     if not s:
         return None
     try:
         dt = dtparser.parse(s, dayfirst=True)
         return dt.strftime("%d/%m/%Y à %H:%M")
-    except:
+    except Exception:
         return s
 
-def save_feedback(reference: str, rating: int, comment: str = ""):
-    """Sauvegarde le feedback pour une réclamation"""
-    if reference not in st.session_state.feedback_data:
-        st.session_state.feedback_data[reference] = []
-    
-    feedback_entry = {
-        'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'rating': rating,
-        'comment': comment
-    }
-    
-    st.session_state.feedback_data[reference].append(feedback_entry)
-    st.session_state.current_rating[reference] = rating
+def duration_to_seconds(x: Any) -> int:
+    if x is None:
+        return 0
+    s = clean_html_spaces(x).lower()
+    if not s:
+        return 0
 
-def get_average_rating(reference: str) -> Tuple[float, int]:
-    """Retourne la note moyenne et le nombre d'avis"""
-    if reference in st.session_state.feedback_data:
-        feedbacks = st.session_state.feedback_data[reference]
-        if feedbacks:
-            total = sum(f['rating'] for f in feedbacks)
-            return total / len(feedbacks), len(feedbacks)
-    return 0.0, 0
+    if re.fullmatch(r"\d+", s):
+        return int(s)
 
-def render_timeline_simple(status: str, steps_data: List[Dict[str, Any]]):
-    """Affiche une timeline simple et efficace comme sur l'image"""
-    
-    # Ordre des statuts
-    STATUS_FLOW = [
-        "Initialisation",
-        "Etude Technique", 
-        "Traitement",
-        "Infos complémentaires",
-        "Attente retour tiers",
-        "En cours de régularisation",
-        "Valider Regularisation",
-        "Traitée",
-        "A Terminer",
-        "Résolue"
-    ]
-    
-    # Filtrer les statuts présents
-    available_statuses = []
-    for s in STATUS_FLOW:
-        if any(s in step['step'] for step in steps_data) or s in status:
-            available_statuses.append(s)
-    
-    if not available_statuses:
-        st.warning("Aucune information de progression disponible")
-        return
-    
-    # Déterminer l'index du statut actuel
-    current_index = -1
-    for i, s in enumerate(available_statuses):
-        if s in status or status in s:
-            current_index = i
-            break
-    
-    # Calcul du pourcentage de progression
-    progress_pct = ((current_index + 1) / len(available_statuses)) * 100 if current_index >= 0 else 0
-    
-    # Créer la timeline HTML simple
-    timeline_html = f"""
-    <div class="timeline-simple">
-        <div class="timeline-line" style="--progress: {progress_pct}%"></div>
-        <div style="display: flex; justify-content: space-between; position: relative;">
-    """
-    
-    for i, step in enumerate(available_statuses):
-        point_class = "pending"
-        label_class = ""
-        
-        if i < current_index:
-            point_class = "completed"
-            label_class = "completed"
-        elif i == current_index:
-            point_class = "active"
-            label_class = "active"
-        
-        timeline_html += f"""
-            <div class="timeline-step">
-                <div class="timeline-point {point_class}"></div>
-                <div class="timeline-label {label_class}">{step}</div>
-            </div>
-        """
-    
-    timeline_html += "</div></div>"
-    
-    # Afficher le cercle de progression
-    st.markdown(f"""
-    <div style="text-align: center; margin: 2rem 0;">
-        <div class="progress-circle">
-            <svg viewBox="0 0 100 100">
-                <circle class="progress-circle-bg" cx="50" cy="50" r="45"/>
-                <circle class="progress-circle-fill" cx="50" cy="50" r="45" 
-                        style="--progress: {progress_pct}"/>
-            </svg>
-            <div class="progress-circle-text">{int(progress_pct)}%</div>
-        </div>
-        <div style="color: #6b7280; font-size: 14px; margin-top: 1rem;">
-            {current_index + 1} sur {len(available_statuses)} étapes
-            {f"• Statut actuel : <strong style='color: #D50032;'>{available_statuses[current_index] if current_index >= 0 else 'Non déterminé'}</strong>" if current_index >= 0 else ""}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(timeline_html, unsafe_allow_html=True)
-    
-    # Légende simplifiée
-    st.markdown("""
-    <div style="display: flex; justify-content: center; gap: 25px; margin-top: 2rem; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <div class="timeline-point completed" style="width: 12px; height: 12px; margin: 0;"></div>
-            <span style="color: #28a745; font-weight: 600; font-size: 13px;">Terminé</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <div class="timeline-point active" style="width: 12px; height: 12px; margin: 0; animation: none;"></div>
-            <span style="color: #D50032; font-weight: 600; font-size: 13px;">En cours</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <div class="timeline-point" style="width: 12px; height: 12px; margin: 0; background: #e5e7eb;"></div>
-            <span style="color: #9ca3af; font-weight: 600; font-size: 13px;">À venir</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    s_compact = s.replace(" ", "")
+    m = re.fullmatch(r"(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?", s_compact)
+    if m:
+        d, h, mi, sec = [int(v) if v else 0 for v in m.groups()]
+        return d*86400 + h*3600 + mi*60 + sec
 
-def render_star_rating_fluid(reference: str, max_stars: int = 5):
-    """Affiche un système d'étoiles fluide et interactif"""
-    
-    # Initialiser la note si nécessaire
-    if reference not in st.session_state.current_rating:
-        st.session_state.current_rating[reference] = 0
-    
-    current_rating = st.session_state.current_rating[reference]
-    
-    # Créer les étoiles avec Streamlit
-    cols = st.columns(max_stars)
-    selected_rating = current_rating
-    
-    for i in range(max_stars):
-        with cols[i]:
-            star_value = i + 1
-            if st.button("★", key=f"star_{reference}_{i}", 
-                       help=f"Noter {star_value} étoile{'s' if star_value > 1 else ''}",
-                       use_container_width=True):
-                selected_rating = star_value
-                st.session_state.current_rating[reference] = selected_rating
-                st.rerun()
-    
-    # Afficher les étoiles visuellement
-    stars_html = ""
-    for i in range(max_stars):
-        if i < selected_rating:
-            stars_html += '<span class="star selected">★</span>'
-        else:
-            stars_html += '<span class="star">★</span>'
-    
-    st.markdown(f"""
-    <div class="stars-container">
-        {stars_html}
-    </div>
-    <div class="star-rating-text">
-        {selected_rating}/5 étoile{'s' if selected_rating > 1 else ''}
-    </div>
-    """, unsafe_allow_html=True)
-    
-    return selected_rating
+    m2 = re.fullmatch(r"(?:(\d+)mi)?(?:(\d+)s)?", s_compact)
+    if m2:
+        mi, sec = [int(v) if v else 0 for v in m2.groups()]
+        return mi*60 + sec
 
-def get_claim_data(ref: str) -> Optional[Dict[str, Any]]:
-    """Récupère les données de réclamation"""
-    db = {
-        "SGCI 3325G": {
-            "Réf. Réclamation": "SGCI 3325G",
-            "Date de création": "15-01-2025 10:30:00",
-            "Date dernière modification": "20-01-2025 14:15:00",
-            "Etat": "En cours de régularisation",
-            "Type": "Monetique",
-            "Activité": "Hôtel 648 56",
-            "Motif": "RETRAIT CONTESTE-NON RECONNU",
-            "Objet de la réclamation": "Hôtel 1080 central",
-            "Caractère": "En étude",
-            "Agence": "00111 PLATEAU",
-            "Montant": "10000",
-            "Dévise du montant": "XOF",
-            "SLA Réclamation": "[REC - Etude Technique:5h 20m 10s, REC - Traitement Back:1d 2h 30m 0s]",
-        },
-        "SGCI-338245": {
-            "Réf. Réclamation": "SGCI-338245",
-            "Date de création": "18-12-2024 13:16:36",
-            "Date dernière modification": "19-12-2024 11:00:00",
-            "Etat": "A Terminer",
-            "Type": "Monetique",
-            "Activité": "Retrait GAB SG",
-            "Motif": "RETRAIT CONTESTE-NON RECONNU",
-            "Objet de la réclamation": "Retrait DAB contesté",
-            "Caractère": "Non fondé",
-            "Agence": "00111-PLATEAU",
-            "Montant": "100000",
-            "Dévise du montant": "XOF",
-            "SLA Réclamation": "[REC - Etude Technique:10h 38m 16s, REC - Traitement Back:2d 10h 54m 1s]",
-        }
-    }
-    
-    for variant in [ref, ref.upper(), ref.replace("-", " "), ref.replace(" ", "-")]:
-        if variant in db:
-            return db[variant]
-    return None
+    return 0
+
+def seconds_to_human(seconds: int) -> str:
+    if seconds <= 0:
+        return "0s"
+    d, rem = divmod(seconds, 86400)
+    h, rem = divmod(rem, 3600)
+    m, s = divmod(rem, 60)
+    parts = []
+    if d: parts.append(f"{d}j")
+    if h: parts.append(f"{h}h")
+    if m: parts.append(f"{m}min")
+    if s: parts.append(f"{s}s")
+    return " ".join(parts)
+
 
 # =========================================================
-# INTERFACE PRINCIPALE OPTIMISÉE
+# PARSING WORKFLOW
 # =========================================================
+def parse_workflow_from_sla(raw: Any) -> List[Dict[str, Any]]:
+    s = clean_html_spaces(raw).strip()
+    s = s.strip("[]")
+    if not s:
+        return []
 
-# Header premium
-st.markdown("""
-<div class="header-premium">
-    <div style="max-width: 1200px; margin: 0 auto; padding: 0 20px; position: relative; z-index: 2;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 20px;">
-                <img src="https://particuliers.societegenerale.ci/fileadmin/user_upload/logos/SGBCI103_2025.svg" 
-                     style="height: 50px; filter: brightness(0) invert(1);">
-                <div>
-                    <h1 style="margin: 0; color: white; font-weight: 800; font-size: 24px;">
-                        Suivi de Réclamation
-                    </h1>
-                    <p style="margin: 5px 0 0 0; color: rgba(255, 255, 255, 0.9); font-size: 14px;">
-                        Service Client - Suivi en temps réel
-                    </p>
-                </div>
-            </div>
-            <div style="text-align: right;">
-                <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); font-weight: 600; text-transform: uppercase;">Support Client</div>
-                <div style="font-size: 22px; font-weight: 800; color: white; margin-top: 3px;">
-                    27 20 20 10 10
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Contenu principal
-st.markdown('<div style="max-width: 1200px; margin: 0 auto; padding: 0 20px;">', unsafe_allow_html=True)
-
-# Section recherche simplifiée
-st.markdown('<div class="fade-in-up">', unsafe_allow_html=True)
-
-col_title, col_space, col_phone = st.columns([3, 1, 2])
-with col_title:
-    st.markdown("""
-    <h2 style="color: #111827; margin-bottom: 1rem; font-weight: 800;">
-        🔍 Rechercher votre réclamation
-    </h2>
-    <p style="color: #6b7280; margin-bottom: 1.5rem; font-size: 15px;">
-        Saisissez votre référence pour suivre l'avancement de votre dossier
-    </p>
-    """, unsafe_allow_html=True)
-
-with st.container():
-    col_input, col_btn = st.columns([3, 1])
-    with col_input:
-        reference = st.text_input(" ", 
-                                placeholder="Ex: SGCI 3325G ou SGCI-338245",
-                                key="search_input",
-                                label_visibility="collapsed")
-    with col_btn:
-        search_clicked = st.button("Rechercher", type="primary", use_container_width=True)
-
-# Affichage des résultats
-if search_clicked and reference:
-    st.session_state.current_reference = reference
-    data = get_claim_data(reference)
-    
-    if not data:
-        st.error("""
-        <div style='background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.04)); 
-                   border: 2px solid rgba(239, 68, 68, 0.3); padding: 1.5rem; border-radius: 16px; margin: 2rem 0;'>
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="font-size: 24px;">❌</div>
-                <div>
-                    <strong style="color: #dc2626;">Réclamation introuvable</strong><br>
-                    <span style="color: #6b7280;">Vérifiez la référence et réessayez</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.stop()
-    
-    # Extraction des données
-    ref_out = clean_html_spaces(data.get("Réf. Réclamation", reference))
-    created = parse_date_fr(data.get("Date de création")) or "Non disponible"
-    updated = parse_date_fr(data.get("Date dernière modification")) or "Non disponible"
-    etat = clean_html_spaces(data.get("Etat", "Non spécifié"))
-    type_rec = clean_html_spaces(data.get("Type", "Non spécifié"))
-    activite = clean_html_spaces(data.get("Activité", "Non spécifié"))
-    motif = clean_html_spaces(data.get("Motif", "Non spécifié"))
-    objet = clean_html_spaces(data.get("Objet de la réclamation", "Non spécifié"))
-    caractere = clean_html_spaces(data.get("Caractère", ""))
-    agence = clean_html_spaces(data.get("Agence", "Non spécifié"))
-    montant = clean_html_spaces(data.get("Montant", ""))
-    devise = clean_html_spaces(data.get("Dévise du montant", "XOF"))
-    
-    # Traitement du workflow
-    sla = data.get("SLA Réclamation", "")
     steps = []
-    if sla:
-        s = clean_html_spaces(sla).strip("[]")
-        for item in s.split(","):
-            item = item.strip()
-            if ":" in item:
-                step, dur = item.split(":", 1)
-                step = step.replace("REC -", "").strip()
-                steps.append({"step": step, "duration": dur})
+    for item in s.split(","):
+        item = item.strip()
+        if ":" not in item:
+            continue
+        step, dur = item.split(":", 1)
+        step = step.replace("REC -", "").strip()
+
+        if "traitement back" in step.lower():
+            step = "Traitement"
+        if "en régularisation" in step.lower() or "en regularisation" in step.lower():
+            step = "En cours de régularisation"
+
+        sec = duration_to_seconds(dur)
+        if sec > 0:
+            steps.append({"step": step, "seconds": sec, "human": seconds_to_human(sec)})
+
+    return steps
+
+
+# =========================================================
+# UI COMPONENTS AMÉLIORÉS
+# =========================================================
+def pill_status(text: str) -> str:
+    color = STATUS_COLORS.get(text, "#CC0000")
+    return f'<span class="pill" style="background:{color};color:white;">{text}</span>'
+
+def chunk_list(lst: List[str], size: int) -> List[List[str]]:
+    return [lst[i:i+size] for i in range(0, len(lst), size)]
+
+def render_suivi_traitement(status: str, caractere: str):
+    """
+    Affiche le bloc "Suivi du traitement" selon le design demandé
+    """
+    st.markdown("### 🔄 Suivi du traitement")
     
-    # Carte principale de la réclamation
-    st.markdown(f"""
-    <div class="card-modern fade-in-up">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; flex-wrap: wrap; gap: 15px;">
-            <div style="flex: 1; min-width: 250px;">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
-                    <div style="background: linear-gradient(135deg, #D50032, #B0002A); width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-                        <span style="color: white; font-size: 20px;">📋</span>
-                    </div>
-                    <div>
-                        <h2 style="color: #111827; margin: 0; font-weight: 800; font-size: 22px;">
-                            Réclamation {ref_out}
-                        </h2>
-                        <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 13px;">
-                            Créée le {created}
-                        </p>
-                    </div>
-                </div>
-            </div>
-            <div class="badge {'badge-success' if etat in ['Résolue', 'Traitée'] else 'badge-primary'}" 
-                 style="font-size: 11px; padding: 6px 14px;">
-                {etat}
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # Informations en grille moderne
-    col_info1, col_info2 = st.columns(2)
-    
-    with col_info1:
-        st.markdown('<div class="info-section">', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
-            <div style="background: rgba(213, 0, 50, 0.1); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                <span style="color: #D50032; font-size: 16px;">📄</span>
-            </div>
-            <h3 style="color: #111827; margin: 0; font-weight: 700; font-size: 16px;">
-                Informations générales
-            </h3>
-        </div>
-        """, unsafe_allow_html=True)
+    # Création du bloc avec style CSS
+    with st.container():
+        st.markdown('<div class="suivi-bloc">', unsafe_allow_html=True)
         
-        st.markdown(f"""
-        <div style="display: grid; gap: 8px;">
-            <div class="info-item">
-                <span class="info-label">Type</span>
-                <span class="info-value">{type_rec}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Agence</span>
-                <span class="info-value">{agence}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Activité</span>
-                <span class="info-value">{activite}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # Caractère de la réclamation
+        if caractere and caractere.strip():
+            st.markdown(f'<div class="caractere-urgent">Caractère de la réclamation : <strong>{caractere}</strong></div>', unsafe_allow_html=True)
+        
+        # Statut actuel
+        st.markdown(f"#### Statut actuel :")
+        st.markdown(pill_status(status), unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Progression du traitement
+        st.markdown("#### Progression du traitement")
+        
+        # Étapes du workflow
+        etapes = ["Initialisation", "Traitement", "Traitée", "Valider régularisation", 
+                  "En cours de régularisation", "A terminer", "Résolue"]
+        
+        # Trouver l'index de l'étape actuelle
+        status_lower = status.lower()
+        current_index = -1
+        for i, etape in enumerate(etapes):
+            if etape.lower() in status_lower or status_lower in etape.lower():
+                current_index = i
+                break
+        
+        # Afficher les étapes avec indicateur visuel
+        cols = st.columns(len(etapes))
+        for i, etape in enumerate(etapes):
+            with cols[i]:
+                if i < current_index:
+                    # Étape terminée
+                    icon = "✅"
+                    color = "#198754"
+                elif i == current_index:
+                    # Étape en cours
+                    icon = "⏳"
+                    color = "#CC0000"
+                else:
+                    # Étape future
+                    icon = "○"
+                    color = "#6c757d"
+                
+                st.markdown(
+                    f"""
+                    <div style="text-align:center;">
+                        <div style="font-size:1.5rem;color:{color};margin-bottom:5px;">{icon}</div>
+                        <div style="font-size:0.8rem;font-weight:500;">{etape}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+        
         st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col_info2:
-        st.markdown('<div class="info-section">', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 1rem;">
-            <div style="background: rgba(213, 0, 50, 0.1); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                <span style="color: #D50032; font-size: 16px;">📊</span>
-            </div>
-            <h3 style="color: #111827; margin: 0; font-weight: 700; font-size: 16px;">
-                Détails spécifiques
-            </h3>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown(f"""
-        <div style="display: grid; gap: 8px;">
-            <div class="info-item">
-                <span class="info-label">Objet</span>
-                <span class="info-value">{objet}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Motif</span>
-                <span class="info-value">{motif}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Montant</span>
-                <span class="info-value">{montant + ' ' + devise if montant else 'Non spécifié'}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Caractère de la réclamation
-    if caractere and caractere.strip():
-        st.markdown(f"""
-        <div style="background: {'rgba(213, 0, 50, 0.05)' if 'non fondé' in caractere.lower() else 'rgba(40, 167, 69, 0.05)'}; 
-                    border: 2px solid {'rgba(213, 0, 50, 0.2)' if 'non fondé' in caractere.lower() else 'rgba(40, 167, 69, 0.2)'}; 
-                    padding: 1.25rem; border-radius: 16px; margin: 1.5rem 0;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="background: {'rgba(213, 0, 50, 0.1)' if 'non fondé' in caractere.lower() else 'rgba(40, 167, 69, 0.1)'}; 
-                         width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                        <span style="color: {'#D50032' if 'non fondé' in caractere.lower() else '#28a745'}; font-size: 18px;">
-                            {'⚠️' if 'non fondé' in caractere.lower() else '✅'}
-                        </span>
-                    </div>
-                    <div>
-                        <div style="color: {'#D50032' if 'non fondé' in caractere.lower() else '#28a745'}; font-weight: 700; font-size: 15px;">
-                            Caractère de la réclamation
-                        </div>
-                        <div style="color: #4b5563; font-size: 14px; margin-top: 4px;">
-                            {caractere}
-                        </div>
-                    </div>
+
+def render_workflow_details(status: str, steps: List[Dict[str, Any]]):
+    """
+    Affiche les détails du workflow avec durée
+    """
+    if status not in STATUSES_ORDER:
+        st.warning("Le statut actuel n'est pas reconnu dans le référentiel.")
+        status_idx = -1
+    else:
+        status_idx = STATUSES_ORDER.index(status)
+
+    # durées par step
+    sec_by_step = {}
+    for s in steps:
+        sec_by_step[s["step"]] = sec_by_step.get(s["step"], 0) + int(s["seconds"])
+
+    # Affichage en grille
+    rows = chunk_list(STATUSES_ORDER, 5)
+
+    for r in rows:
+        cols = st.columns(len(r))
+        for i, step_name in enumerate(r):
+            global_index = STATUSES_ORDER.index(step_name)
+
+            if status_idx == -1:
+                state = "future"
+            elif global_index < status_idx:
+                state = "done"
+            elif global_index == status_idx:
+                state = "current"
+            else:
+                state = "future"
+
+            if state == "done":
+                bg = "#198754"
+                fg = "white"
+                icon = "✅"
+            elif state == "current":
+                bg = "#CC0000"
+                fg = "white"
+                icon = "⏳"
+            else:
+                bg = "#f1f3f5"
+                fg = "#343a40"
+                icon = "•"
+
+            dur = seconds_to_human(sec_by_step.get(step_name, 0)) if sec_by_step.get(step_name, 0) else "—"
+
+            cols[i].markdown(
+                f"""
+                <div class="wf-card" style="background:{bg};color:{fg};">
+                  <div class="wf-title">{icon} {step_name}</div>
+                  <div class="wf-dur">{dur}</div>
                 </div>
-                <div class="badge {'badge-primary' if 'non fondé' in caractere.lower() else 'badge-success'}" 
-                     style="font-size: 11px; padding: 5px 12px;">
-                    {caractere}
-                </div>
-            </div>
-            {"<div style='margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(213, 0, 50, 0.1);'>"
-             "<div style='color: #D50032; font-size: 13px; font-weight: 600;'>"
-             "⚠️ Contactez votre gestionnaire de compte pour tout justificatif"
-             "</div></div>" 
-             if 'non fondé' in caractere.lower() else ""}
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Section Suivi du traitement
-    st.markdown("""
-    <div class="card-modern fade-in-up">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 2rem;">
-            <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-                <span style="color: white; font-size: 20px;">🔄</span>
-            </div>
-            <div>
-                <h2 style="color: #111827; margin: 0; font-weight: 800; font-size: 20px;">
-                    Suivi du traitement
-                </h2>
-                <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 13px;">
-                    Visualisez l'avancement de votre dossier
-                </p>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    render_timeline_simple(etat, steps)
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Section Feedback fluide
-    if etat in ["A Terminer", "Résolue", "Traitée"]:
-        avg_rating, num_reviews = get_average_rating(ref_out)
-        
-        st.markdown(f"""
-        <div class="card-modern fade-in-up">
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem;">
-                <div style="background: linear-gradient(135deg, #f59e0b, #d97706); width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-                    <span style="color: white; font-size: 20px;">⭐</span>
-                </div>
-                <div>
-                    <h2 style="color: #111827; margin: 0; font-weight: 800; font-size: 20px;">
-                        Évaluation du service
-                    </h2>
-                    <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 13px;">
-                        Partagez votre expérience avec nous
-                    </p>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # Vérifier si un feedback existe déjà
-        has_feedback = ref_out in st.session_state.feedback_data and st.session_state.feedback_data[ref_out]
-        
-        if has_feedback:
-            current_rating = st.session_state.current_rating.get(ref_out, 0)
-            if current_rating > 0:
-                stars_display = "★" * current_rating + "☆" * (5 - current_rating)
-                st.markdown(f"""
-                <div class="success-message-premium">
-                    <div style="font-size: 28px;">✅</div>
-                    <div>
-                        <div style="font-weight: 700; margin-bottom: 4px;">Merci pour votre évaluation !</div>
-                        <div style="font-size: 14px; color: rgba(40, 167, 69, 0.9);">
-                            Votre feedback est précieux pour nous améliorer
-                        </div>
-                    </div>
-                </div>
-                <div style="text-align: center; padding: 1.5rem; background: rgba(255, 193, 7, 0.05); border-radius: 16px; margin: 1rem 0;">
-                    <div style="font-size: 32px; color: #ffc107; letter-spacing: 3px; margin-bottom: 10px;">
-                        {stars_display}
-                    </div>
-                    <div style="font-size: 16px; color: #4b5563; font-weight: 600;">
-                        {current_rating}/5 étoile{'s' if current_rating > 1 else ''}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            # Afficher le système d'étoiles fluide
-            st.markdown("### Comment évaluez-vous le traitement ?")
-            
-            # Étoiles interactives
-            rating = render_star_rating_fluid(ref_out, 5)
-            
-            # Zone de commentaire
-            comment = st.text_area(
-                "💬 Votre commentaire (optionnel)",
-                placeholder="Partagez votre expérience, suggestions ou remarques...",
-                height=100,
-                key=f"comment_{ref_out}"
+                """,
+                unsafe_allow_html=True
             )
-            
-            # Bouton de soumission
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                if st.button("📤 Soumettre mon évaluation", type="primary", use_container_width=True, key=f"submit_{ref_out}"):
-                    if rating > 0:
-                        save_feedback(ref_out, rating, comment)
-                        st.success("✅ Merci ! Votre évaluation a été enregistrée.")
-                        st.balloons()
-                        time.sleep(1.5)
-                        st.rerun()
-                    else:
-                        st.warning("Veuillez sélectionner une note avant de soumettre")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Ressources utiles
-    st.markdown("""
-    <div class="card-modern fade-in-up">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem;">
-            <div style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-                <span style="color: white; font-size: 20px;">📚</span>
-            </div>
-            <div>
-                <h2 style="color: #111827; margin: 0; font-weight: 800; font-size: 20px;">
-                    Ressources utiles
-                </h2>
-                <p style="color: #6b7280; margin: 4px 0 0 0; font-size: 13px;">
-                    Accédez à nos services en ligne
-                </p>
-            </div>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 1.5rem;">
-            <a href="https://particuliers.societegenerale.ci/fr/reclamation/" 
-               target="_blank" 
-               style="text-decoration: none;">
-                <div style="background: white; border: 2px solid #e5e7eb; border-radius: 16px; padding: 1.5rem; transition: all 0.3s ease; height: 100%;">
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                        <div style="background: rgba(213, 0, 50, 0.1); width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                            <span style="color: #D50032; font-size: 20px;">🔗</span>
-                        </div>
-                        <h3 style="color: #111827; margin: 0; font-weight: 700; font-size: 16px;">
-                            Espace client
-                        </h3>
-                    </div>
-                    <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin-bottom: 15px;">
-                        Accédez à votre espace personnel pour consulter vos documents.
-                    </p>
-                    <div style="color: #D50032; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                        Visiter l'espace <span style="font-size: 18px;">→</span>
-                    </div>
-                </div>
-            </a>
-            
-            <a href="https://particuliers.societegenerale.ci/fr/faq/" 
-               target="_blank" 
-               style="text-decoration: none;">
-                <div style="background: white; border: 2px solid #e5e7eb; border-radius: 16px; padding: 1.5rem; transition: all 0.3s ease; height: 100%;">
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                        <div style="background: rgba(213, 0, 50, 0.1); width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-                            <span style="color: #D50032; font-size: 20px;">📋</span>
-                        </div>
-                        <h3 style="color: #111827; margin: 0; font-weight: 700; font-size: 16px;">
-                            Centre d'aide
-                        </h3>
-                    </div>
-                    <p style="color: #6b7280; font-size: 14px; line-height: 1.5; margin-bottom: 15px;">
-                        Consultez notre FAQ et guides pratiques.
-                    </p>
-                    <div style="color: #D50032; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                        Consulter la FAQ <span style="font-size: 18px;">→</span>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Carte de contact premium
-    st.markdown("""
-    <div class="contact-card-premium">
-        <div style="position: relative; z-index: 2;">
-            <h3 style="color: white; margin: 0; font-weight: 800; font-size: 22px;">
-                📞 Besoin d'assistance ?
-            </h3>
-            <p style="color: rgba(255, 255, 255, 0.9); margin: 12px 0 20px 0; font-size: 15px;">
-                Notre équipe de conseillers dédiés est à votre écoute
-            </p>
-            <div class="phone-number-premium">27 20 20 10 10</div>
-            <p style="color: rgba(255, 255, 255, 0.8); font-size: 13px; margin-top: 20px;">
-                📅 Du lundi au vendredi : 8h00 - 18h00<br>
-                📅 Samedi : 9h00 - 13h00
-            </p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+    # Tableau détail
+    if steps:
+        st.markdown("#### ⏱️ Détail des durées")
+        agg = {}
+        for s in steps:
+            agg[s["step"]] = agg.get(s["step"], 0) + int(s["seconds"])
+        detail = [{"Étape": k, "Durée": seconds_to_human(v), "Secondes": v} for k, v in agg.items()]
+        detail = sorted(detail, key=lambda x: x["Secondes"], reverse=True)
 
-# Footer simplifié
-st.markdown("""
-<div style="text-align: center; margin-top: 3rem; padding: 2.5rem 0; color: #6b7280; border-top: 1px solid #e5e7eb;">
-    <p style="margin: 0; font-weight: 600; font-size: 13px; letter-spacing: 0.3px;">
-        © 2026 Société Générale Côte d'Ivoire. Tous droits réservés.
-    </p>
-    <div style="display: flex; justify-content: center; gap: 20px; margin-top: 12px; font-size: 12px;">
-        <a href="https://particuliers.societegenerale.ci/fr/mentions-legales/" 
-           style="color: #6b7280; text-decoration: none; font-weight: 500;">
-            Mentions légales
-        </a>
-        <a href="https://particuliers.societegenerale.ci/fr/confidentialite/" 
-           style="color: #6b7280; text-decoration: none; font-weight: 500;">
-            Confidentialité
-        </a>
-        <a href="https://particuliers.societegenerale.ci/fr/contact/" 
-           style="color: #6b7280; text-decoration: none; font-weight: 500;">
-            Contact
-        </a>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+        total = sum(x["Secondes"] for x in detail)
+        st.caption(f"Durée totale cumulée : **{seconds_to_human(total)}**")
+        st.dataframe(detail, use_container_width=True, hide_index=True)
+    else:
+        st.info("Aucune information de durée disponible pour cette réclamation.")
+
+def render_avis_section(ref: str, status: str):
+    """
+    Affiche la section pour donner son avis si le statut est au moins "A Terminer"
+    """
+    # Vérifier si le statut est "A Terminer" ou "Résolue"
+    status_lower = status.lower()
+    if "a terminer" in status_lower or "résolue" in status_lower or "resolue" in status_lower:
+        
+        st.markdown('<div class="avis-section">', unsafe_allow_html=True)
+        st.markdown("### 💬 Votre avis nous intéresse !")
+        st.markdown("**Comment évaluez-vous le traitement de votre réclamation ?**")
+        
+        # Évaluation par étoiles
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            if st.button("⭐", use_container_width=True, key="star1"):
+                st.session_state.rating = 1
+        with col2:
+            if st.button("⭐⭐", use_container_width=True, key="star2"):
+                st.session_state.rating = 2
+        with col3:
+            if st.button("⭐⭐⭐", use_container_width=True, key="star3"):
+                st.session_state.rating = 3
+        with col4:
+            if st.button("⭐⭐⭐⭐", use_container_width=True, key="star4"):
+                st.session_state.rating = 4
+        with col5:
+            if st.button("⭐⭐⭐⭐⭐", use_container_width=True, key="star5"):
+                st.session_state.rating = 5
+        
+        # Commentaire
+        comment = st.text_area("Votre commentaire (facultatif)", 
+                              placeholder="Partagez votre expérience...",
+                              height=100)
+        
+        # Bouton d'envoi
+        if st.button("Envoyer mon avis", type="primary", use_container_width=True):
+            if 'rating' in st.session_state:
+                st.success(f"Merci pour votre évaluation de {st.session_state.rating} ⭐ ! Votre feedback a été enregistré.")
+                # Ici, normalement, on enverrait les données à un backend
+            else:
+                st.warning("Veuillez sélectionner une évaluation.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# =========================================================
+# MAIN - UI CLIENT AMÉLIORÉE
+# =========================================================
+st.markdown("#### 🔎 Rechercher ma réclamation")
+st.markdown("Saisissez votre référence de réclamation pour suivre l'avancement")
+
+ref = st.text_input("**Référence de réclamation**", 
+                   placeholder="Ex : SGCI-338245",
+                   label_visibility="collapsed").strip()
+
+col_btn1, col_btn2 = st.columns([1, 1])
+with col_btn1:
+    search_clicked = st.button("🔍 Rechercher", type="primary", use_container_width=True)
+with col_btn2:
+    reset_clicked = st.button("🔄 Réinitialiser", use_container_width=True)
+
+if reset_clicked:
+    st.rerun()
+
+if search_clicked:
+    if not ref:
+        st.warning("Merci de saisir une référence de réclamation.")
+        st.stop()
+
+    data = fetch_reclamation_data(ref)
+    if not data:
+        st.error("Réclamation introuvable. Vérifiez la référence saisie.")
+        st.stop()
+
+    # Extraction champs
+    ref_out = clean_html_spaces(data.get("Réf. Réclamation"))
+    filiale = clean_html_spaces(data.get("Filiale"))
+    etat = clean_html_spaces(data.get("Etat"))
+    type_rec = clean_html_spaces(data.get("Type"))
+    activite = clean_html_spaces(data.get("Activité"))
+    motif = clean_html_spaces(data.get("Motif"))
+    objet = clean_html_spaces(data.get("Objet de la réclamation"))
+    caractere = clean_html_spaces(data.get("Caractère", ""))  # Nouveau champ
+    agence = clean_html_spaces(data.get("Agence"))
+    montant = clean_html_spaces(data.get("Montant"))
+    devise = clean_html_spaces(data.get("Dévise du montant"))
+
+    created = parse_date_fr_maybe(data.get("Date de création")) or "—"
+    updated = parse_date_fr_maybe(data.get("Date dernière modification")) or "—"
+
+    # normaliser statut
+    status = etat
+    if "en régularisation" in status.lower() or "en regularisation" in status.lower():
+        status = "En cours de régularisation"
+    
+    # workflow
+    steps = parse_workflow_from_sla(data.get("SLA Réclamation"))
+
+    st.divider()
+
+    # Informations sur la réclamation (anciennement Résumé)
+    st.markdown("### 📋 Informations sur la réclamation")
+    a, b, c = st.columns(3)
+    with a:
+        st.markdown("**Référence**")
+        st.markdown(f"**{ref_out or ref}**")
+        if filiale:
+            st.caption(f"Filiale : **{filiale}**")
+    with b:
+        st.markdown("**Date de création**")
+        st.write(created)
+        st.markdown("**Dernière mise à jour**")
+        st.write(updated)
+    with c:
+        st.markdown("**Statut actuel**")
+        st.markdown(pill_status(status), unsafe_allow_html=True)
+
+    st.divider()
+
+    # Détails essentiels
+    st.markdown("### 📌 Détails")
+    d1, d2 = st.columns(2)
+    with d1:
+        st.write(f"**Type :** {type_rec or '—'}")
+        st.write(f"**Activité :** {activite or '—'}")
+        st.write(f"**Motif :** {motif or '—'}")
+        # Affichage du caractère à la place du canal
+        if caractere and caractere.strip():
+            st.write(f"**Caractère :** {caractere}")
+    with d2:
+        st.write(f"**Agence :** {agence or '—'}")
+        st.write(f"**Objet :** {objet or '—'}")
+        if montant:
+            st.write(f"**Montant :** {montant} {devise}".strip())
+        else:
+            st.write("**Montant :** —")
+
+    # Message pour caractère "non fondé"
+    if caractere and "non fondé" in caractere.lower():
+        st.warning("**Contactez votre gestionnaire pour plus d'informations sur le caractère non fondé de votre réclamation.**")
+
+    # Lien vers le parcours de réclamation
+    st.markdown("---")
+    st.markdown(
+        f"""
+        <div style="text-align:center; padding:15px; background-color:#F9F9F9; border-radius:10px; margin:10px 0;">
+            <p style="margin-bottom:10px;">📋 <strong>Pour plus d'informations sur le processus de réclamation</strong></p>
+            <a href="https://particuliers.societegenerale.ci/fr/reclamation/" target="_blank" style="color:#CC0000; text-decoration:none; font-weight:bold;">
+                Consultez notre parcours de réclamation →
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
+    # Suivi du traitement
+    render_suivi_traitement(status=status, caractere=caractere)
+    
+    # Détails du workflow
+    render_workflow_details(status=status, steps=steps)
+
+    # Section pour donner son avis
+    render_avis_section(ref=ref, status=status)
+
+    # Informations de contact
+    st.markdown("---")
+    st.markdown(
+        """
+        <div class="contact-info">
+            <h4>📞 Besoin d'aide ?</h4>
+            <p style="font-size:1.2rem; font-weight:bold; color:#CC0000; margin:10px 0;">
+                Votre conseiller clientèle au <strong>27 20 20 10 10</strong>
+            </p>
+            <p style="font-size:0.9rem; color:#666; margin-top:10px;">
+                Du lundi au vendredi de 8h à 17h<br>
+                Samedi de 9h à 13h
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Note client-safe
+    st.info("🔒 Pour protéger vos données, cette page n'affiche aucune information personnelle (nom, compte, téléphone).")
+
+# Message d'accueil si aucune recherche
+else:
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="text-align:center; padding:40px 20px;">
+            <h3 style="color:#CC0000;">Bienvenue sur le service de suivi de réclamation SGCI</h3>
+            <p style="font-size:1.1rem; margin-top:20px;">
+                Entrez votre référence de réclamation pour suivre son avancement en temps réel.
+            </p>
+            <p style="margin-top:30px; color:#666;">
+                Vous trouverez votre référence dans l'email de confirmation ou sur l'accusé de réception.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Exemples de références
+    with st.expander("📋 Exemples de formats de référence"):
+        st.write("- **SGCI-338245**")
+        st.write("- **SGCI-123456**")
+        st.write("- **SGCI-789012**")
