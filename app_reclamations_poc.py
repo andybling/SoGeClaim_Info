@@ -1,198 +1,274 @@
 import re
 import html
-from typing import Dict, Any, List, Optional
+import json
+from typing import Dict, Any, List, Optional, Tuple
+from datetime import datetime
+from pathlib import Path
 
 import streamlit as st
 from dateutil import parser as dtparser
-
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import numpy as np
 
 # =========================================================
-# CONFIGURATION DE L'APPLICATION
+# CONFIGURATION ET STYLE PREMIUM
 # =========================================================
 st.set_page_config(
-    page_title="Suivi de Réclamation SGCI",
-    page_icon="🆑",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    page_title="Suivi de Réclamation | Société Générale Côte d'Ivoire",
+    page_icon="📋",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+    menu_items=None
 )
 
-# Logo et thème rouge/noir/blanc
-st.markdown(
-    """
-    <style>
-      /* Réduction marges pour un rendu propre sur mobile */
-      .block-container { padding-top: 1rem; padding-bottom: 1rem; }
-      /* Légère amélioration des titres */
-      h1, h2, h3 { letter-spacing: -0.2px; }
-      h1 { color: #D50032; }
-      h2, h3 { color: #000000; }
-      /* Cards workflow */
-      .wf-card {
-        border-radius: 14px;
-        padding: 10px 10px;
-        text-align: center;
-        font-size: 0.85rem;
-        line-height: 1.2rem;
-        box-shadow: 0 1px 8px rgba(0,0,0,0.06);
-        margin-bottom: 10px;
-        border: 1px solid #e0e0e0;
-      }
-      .wf-title { font-weight: 800; }
-      .wf-dur { opacity: 0.95; font-size: 0.78rem; margin-top: 4px; }
-      .muted { color: rgba(0,0,0,0.55); }
-      .pill {
-        display:inline-block;
-        padding: 6px 10px;
-        border-radius: 999px;
-        font-weight: 800;
-        font-size: 0.85rem;
-      }
-      .stButton button {
-        background-color: #D50032;
+# CSS personnalisé avec effets premium
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    * {
+        font-family: 'Inter', sans-serif;
+    }
+    
+    .main {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding-bottom: 50px;
+    }
+    
+    .stApp {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    }
+    
+    /* Header avec effet de verre */
+    .header-glass {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        padding: 1rem 0;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+    }
+    
+    /* Carte avec effet néomorphique */
+    .card-neomorphic {
+        background: linear-gradient(145deg, #ffffff, #f0f0f0);
+        border-radius: 20px;
+        padding: 2rem;
+        margin: 1rem 0;
+        box-shadow: 20px 20px 60px #d9d9d9, -20px -20px 60px #ffffff;
+        border: none;
+        transition: all 0.3s ease;
+    }
+    
+    .card-neomorphic:hover {
+        transform: translateY(-5px);
+        box-shadow: 25px 25px 75px #d9d9d9, -25px -25px 75px #ffffff;
+    }
+    
+    /* Bouton premium */
+    .stButton > button {
+        background: linear-gradient(135deg, #D50032 0%, #B0002A 100%);
         color: white;
         border: none;
-      }
-      .stButton button:hover {
-        background-color: #A80028;
-        color: white;
-      }
-      .card {
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 15px;
-        background-color: #f9f9f9;
-      }
-      .info-box {
-        background-color: #fff5f7;
-        border-left: 4px solid #D50032;
-        padding: 10px;
-        margin: 10px 0;
-      }
-      .contact-info {
-        background-color: #f0f0f0;
-        padding: 10px;
-        border-radius: 8px;
-        text-align: center;
-        margin: 15px 0;
-      }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# Header avec logo
-col_logo, col_title = st.columns([1, 3])
-with col_logo:
-    st.image("https://particuliers.societegenerale.ci/fileadmin/user_upload/logos/SGBCI103_2025.svg", width=80)
-with col_title:
-    st.title("Suivi de Réclamation")
-st.caption("Saisissez votre référence de réclamation pour suivre l'avancement.")
-
-# Contact info
-st.markdown(
-    """
-    <div class="contact-info">
-        <strong>Votre conseiller clientèle</strong><br>
-        <span style="color: #D50032; font-weight: bold; font-size: 1.2em;">27 20 20 10 10</span>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-
-# =========================================================
-# DONNÉES SIMULÉES (POC) - À REMPLACER PAR BACKEND/API
-# =========================================================
-def fetch_reclamation_data(ref: str) -> Optional[Dict[str, Any]]:
-    """
-    Simule la récupération des données d'une réclamation.
-    En V1: remplacer par un appel API / DB / Excel.
-    """
-    reclamations_db = {
-        "SGCI-338245": {
-            "Filiale": "SGCI",
-            "Réf. Réclamation": "SGCI-338245",
-            "Date de création": "18-12-2024 13:16:36",
-            "Date dernière modification": "19-12-2024 11:00:00",
-            "Etat": "A Terminer",
-            "Type": "Monetique",
-            "Activité": "Retrait GAB SG",
-            "Motif": "RETRAIT CONTESTE-NON RECONNU",
-            "Objet de la réclamation": "Retrait DAB contesté",
-            "Caractère": "Non fondé",  # Nouveau champ
-            "Canal de réception": "Email",
-            "Agence": "00111-PLATEAU",
-            "Montant": "100000",
-            "Dévise du montant": "XOF",
-            "SLA Réclamation": "[REC - Etude Technique:10h 38m 16s, REC - Traitement Back:2d 10h 54m 1s, REC - En Régularisation:4d 10h 54m 52s]",
-        },
-        "SGCI-123456": {
-            "Filiale": "SGCI",
-            "Réf. Réclamation": "SGCI-123456",
-            "Date de création": "20-12-2024 09:00:00",
-            "Date dernière modification": "22-12-2024 15:30:00",
-            "Etat": "Traitement",
-            "Type": "Service",
-            "Activité": "Frais de tenue de compte",
-            "Motif": "AUTRES",
-            "Objet de la réclamation": "Frais de compte non justifiés",
-            "Caractère": "",  # Champ vide
-            "Canal de réception": "Agence",
-            "Agence": "00225-YAMOUSSOUKRO",
-            "Montant": "5000",
-            "Dévise du montant": "XOF",
-            "SLA Réclamation": "[REC - Traitement:1h 15m 0s, REC - SUPPORT:30m 0s]",
-        },
-        "SGCI 3325G": {  # Ajout de la référence de l'image
-            "Filiale": "SGCI",
-            "Réf. Réclamation": "SGCI 3325G",
-            "Date de création": "15-01-2025 10:30:00",
-            "Date dernière modification": "20-01-2025 14:15:00",
-            "Etat": "Résolue",
-            "Type": "Monetique",
-            "Activité": "Hôtel 648 56",
-            "Motif": "RETRAIT CONTESTE-NON RECONNU",
-            "Objet de la réclamation": "Hôtel 1080 central",
-            "Caractère": "Fondé",
-            "Canal de réception": "Email",
-            "Agence": "00111 PLATEAU",
-            "Montant": "10000",
-            "Dévise du montant": "XOF",
-            "SLA Réclamation": "[REC - Etude Technique:5h 20m 10s, REC - Traitement Back:1d 2h 30m 0s]",
-        }
+        padding: 12px 28px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(213, 0, 50, 0.3);
+        width: 100%;
     }
-    return reclamations_db.get(ref.strip().upper())
-
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(213, 0, 50, 0.4);
+        background: linear-gradient(135deg, #B0002A 0%, #900022 100%);
+    }
+    
+    /* Timeline améliorée */
+    .timeline-container {
+        position: relative;
+        padding: 40px 0;
+    }
+    
+    .timeline-line {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #D50032, #FF3366);
+        transform: translateY(-50%);
+        z-index: 1;
+        border-radius: 2px;
+    }
+    
+    .timeline-point {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: white;
+        border: 4px solid #dee2e6;
+        position: relative;
+        z-index: 2;
+        transition: all 0.3s ease;
+    }
+    
+    .timeline-point.active {
+        border-color: #D50032;
+        background: #D50032;
+        box-shadow: 0 0 0 8px rgba(213, 0, 50, 0.2);
+        animation: pulse 2s infinite;
+    }
+    
+    .timeline-point.completed {
+        border-color: #28a745;
+        background: #28a745;
+    }
+    
+    @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(213, 0, 50, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(213, 0, 50, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(213, 0, 50, 0); }
+    }
+    
+    /* Étoiles interactives */
+    .star-rating {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin: 20px 0;
+    }
+    
+    .star {
+        font-size: 32px;
+        color: #e4e5e9;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .star:hover,
+    .star.hovered {
+        color: #ffc107;
+        transform: scale(1.2);
+    }
+    
+    .star.selected {
+        color: #ffc107;
+        text-shadow: 0 0 10px rgba(255, 193, 7, 0.5);
+    }
+    
+    /* Badges */
+    .badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .badge-primary {
+        background: rgba(213, 0, 50, 0.1);
+        color: #D50032;
+    }
+    
+    .badge-success {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+    
+    .badge-warning {
+        background: rgba(255, 193, 7, 0.1);
+        color: #ffc107;
+    }
+    
+    /* Stats cards */
+    .stat-card {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.12);
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #D50032;
+        margin: 10px 0;
+    }
+    
+    /* Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .fade-in {
+        animation: fadeIn 0.6s ease-out;
+    }
+    
+    /* Contact card */
+    .contact-card {
+        background: linear-gradient(135deg, #D50032 0%, #B0002A 100%);
+        border-radius: 20px;
+        padding: 2rem;
+        color: white;
+        text-align: center;
+        margin: 2rem 0;
+        box-shadow: 0 20px 40px rgba(213, 0, 50, 0.2);
+    }
+    
+    .phone-number {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin: 10px 0;
+        letter-spacing: 1px;
+    }
+    
+    /* Scrollbar personnalisée */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #D50032 0%, #B0002A 100%);
+        border-radius: 4px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # =========================================================
-# STATUTS / WORKFLOW
+# INITIALISATION DE LA SESSION
 # =========================================================
-STATUSES_ORDER = [
-    "Initialisation", "SUPPORT", "Etude Technique", "Traitement", "Infos complémentaires",
-    "Attente retour tiers", "En cours de régularisation", "Valider Regularisation",
-    "Traitée", "A Terminer", "Résolue"
-]
-
-STATUS_COLORS = {
-    "SUPPORT": "#6c757d",
-    "Traitement": "#0d6efd",
-    "Etude Technique": "#6610f2",
-    "Infos complémentaires": "#20c997",
-    "Attente retour tiers": "#fd7e14",
-    "En cours de régularisation": "#ffc107",
-    "Valider Regularisation": "#198754",
-    "Traitée": "#0dcaf0",
-    "A Terminer": "#D50032",  # Rouge SGCI
-    "Initialisation": "#343a40",
-    "Résolue": "#198754",
-}
-
+if 'feedback_data' not in st.session_state:
+    st.session_state.feedback_data = {}
+if 'selected_stars' not in st.session_state:
+    st.session_state.selected_stars = 0
+if 'current_reference' not in st.session_state:
+    st.session_state.current_reference = None
 
 # =========================================================
-# UTILITAIRES (NETTOYAGE / DATES / DURÉES)
+# FONCTIONS UTILITAIRES
 # =========================================================
 def clean_html_spaces(x: Any) -> str:
+    """Nettoie les caractères HTML et espaces spéciaux."""
     if x is None:
         return ""
     s = str(x)
@@ -201,6 +277,7 @@ def clean_html_spaces(x: Any) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 def parse_date_fr_maybe(x: Any) -> Optional[str]:
+    """Parse les dates françaises."""
     s = clean_html_spaces(x)
     if not s:
         return None
@@ -210,334 +287,517 @@ def parse_date_fr_maybe(x: Any) -> Optional[str]:
     except Exception:
         return s
 
-def duration_to_seconds(x: Any) -> int:
-    """
-    Supporte:
-      - 2d 10h 54m 1s
-      - 10h 38m 16s
-      - 27 mi 45 s
-      - 30m 0s
-    """
-    if x is None:
-        return 0
-    s = clean_html_spaces(x).lower()
-    if not s:
-        return 0
-
-    # numérique direct
-    if re.fullmatch(r"\d+", s):
-        return int(s)
-
-    s_compact = s.replace(" ", "")
-
-    # dhms
-    m = re.fullmatch(r"(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?", s_compact)
-    if m:
-        d, h, mi, sec = [int(v) if v else 0 for v in m.groups()]
-        return d*86400 + h*3600 + mi*60 + sec
-
-    # mi/s (ex: 27mi45s)
-    m2 = re.fullmatch(r"(?:(\d+)mi)?(?:(\d+)s)?", s_compact)
-    if m2:
-        mi, sec = [int(v) if v else 0 for v in m2.groups()]
-        return mi*60 + sec
-
-    return 0
-
-def seconds_to_human(seconds: int) -> str:
-    if seconds <= 0:
-        return "0s"
-    d, rem = divmod(seconds, 86400)
-    h, rem = divmod(rem, 3600)
-    m, s = divmod(rem, 60)
-    parts = []
-    if d: parts.append(f"{d}j")
-    if h: parts.append(f"{h}h")
-    if m: parts.append(f"{m}min")
-    if s: parts.append(f"{s}s")
-    return " ".join(parts)
-
-
 # =========================================================
-# PARSING WORKFLOW (SLA Réclamation)
+# COMPOSANTS UI AVANCÉS
 # =========================================================
-def parse_workflow_from_sla(raw: Any) -> List[Dict[str, Any]]:
-    s = clean_html_spaces(raw).strip()
-    s = s.strip("[]")
-    if not s:
-        return []
-
-    steps = []
-    for item in s.split(","):
-        item = item.strip()
-        if ":" not in item:
-            continue
-        step, dur = item.split(":", 1)
-        step = step.replace("REC -", "").strip()
-
-        # normalisations métier
-        if "traitement back" in step.lower():
-            step = "Traitement"
-        if "en régularisation" in step.lower() or "en regularisation" in step.lower():
-            step = "En cours de régularisation"
-
-        sec = duration_to_seconds(dur)
-        if sec > 0:
-            steps.append({"step": step, "seconds": sec, "human": seconds_to_human(sec)})
-
-    return steps
-
-
-# =========================================================
-# UI COMPONENTS
-# =========================================================
-def pill_status(text: str) -> str:
-    color = STATUS_COLORS.get(text, "#6c757d")
-    return f'<span class="pill" style="background:{color};color:white;">{text}</span>'
-
-def chunk_list(lst: List[str], size: int) -> List[List[str]]:
-    return [lst[i:i+size] for i in range(0, len(lst), size)]
-
-def render_workflow(status: str, steps: List[Dict[str, Any]]):
-    st.markdown("### 🔄 Suivi du traitement")
-
-    if status not in STATUSES_ORDER:
-        st.warning("Le statut actuel n'est pas reconnu dans le référentiel.")
-        status_idx = -1
-    else:
-        status_idx = STATUSES_ORDER.index(status)
-
-    # durées par step
-    sec_by_step = {}
-    for s in steps:
-        sec_by_step[s["step"]] = sec_by_step.get(s["step"], 0) + int(s["seconds"])
-
-    # On affiche en lignes de 5 pour un rendu centré propre
-    rows = chunk_list(STATUSES_ORDER, 5)
-
-    for r in rows:
-        cols = st.columns(len(r))
-        for i, step_name in enumerate(r):
-            global_index = STATUSES_ORDER.index(step_name)
-
-            if status_idx == -1:
-                state = "future"
-            elif global_index < status_idx:
-                state = "done"
-            elif global_index == status_idx:
-                state = "current"
-            else:
-                state = "future"
-
-            if state == "done":
-                bg = "#198754"
-                fg = "white"
-                icon = "✅"
-            elif state == "current":
-                bg = "#ffc107"
-                fg = "#1f2d3d"
-                icon = "⏳"
-            else:
-                bg = "#f1f3f5"
-                fg = "#343a40"
-                icon = "•"
-
-            dur = seconds_to_human(sec_by_step.get(step_name, 0)) if sec_by_step.get(step_name, 0) else "—"
-
-            cols[i].markdown(
-                f"""
-                <div class="wf-card" style="background:{bg};color:{fg};">
-                  <div class="wf-title">{icon} {step_name}</div>
-                  <div class="wf-dur">{dur}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-    # Tableau détail
-    if steps:
-        st.markdown("#### ⏱️ Détail des durées")
-        # agrégation et tri
-        agg = {}
-        for s in steps:
-            agg[s["step"]] = agg.get(s["step"], 0) + int(s["seconds"])
-        detail = [{"Étape": k, "Durée": seconds_to_human(v), "Secondes": v} for k, v in agg.items()]
-        detail = sorted(detail, key=lambda x: x["Secondes"], reverse=True)
-
-        total = sum(x["Secondes"] for x in detail)
-        st.caption(f"Durée totale cumulée (selon étapes disponibles) : **{seconds_to_human(total)}**")
-        st.dataframe(detail, use_container_width=True, hide_index=True)
-    else:
-        st.info("Aucune information de durée disponible pour cette réclamation.")
-
-
-# =========================================================
-# FONCTION POUR L'AVIS CLIENT
-# =========================================================
-def render_feedback_form(ref: str):
-    st.markdown("### 💬 Votre avis sur le traitement")
-    st.markdown("Nous attachons une grande importance à votre satisfaction. Merci de partager votre expérience.")
+def render_star_rating(max_stars: int = 5) -> int:
+    """Affiche un composant d'évaluation par étoiles interactif."""
+    cols = st.columns(max_stars)
+    rating = 0
     
-    with st.form(key=f"feedback_form_{ref}"):
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            st.markdown("**Très insatisfait**")
-        with col5:
-            st.markdown("**Très satisfait**")
-        
-        # Note sous forme d'étoiles
-        rating = st.slider("Note globale", 1, 5, 3, 
-                          label_visibility="collapsed",
-                          help="1 = Très insatisfait, 5 = Très satisfait")
-        
-        # Affichage visuel des étoiles
-        stars = "⭐" * rating
-        st.markdown(f"**Votre note : {stars} ({rating}/5)**")
-        
-        # Commentaire
-        comment = st.text_area("Commentaire (optionnel)", 
-                              placeholder="Partagez vos remarques sur le traitement de votre réclamation...",
-                              height=100)
-        
-        # Bouton de soumission
-        submitted = st.form_submit_button("Envoyer mon avis", type="primary")
-        
-        if submitted:
-            # Ici, normalement, on enregistrerait dans une base de données
-            st.success("Merci pour votre feedback ! Votre avis a été enregistré.")
-            st.balloons()
-
-
-# =========================================================
-# MAIN - UI CLIENT
-# =========================================================
-st.markdown("#### 🔎 Rechercher ma réclamation")
-ref = st.text_input("Référence de réclamation", placeholder="Ex : SGCI 3325G, SGCI-338245").strip()
-
-col_btn1, col_btn2 = st.columns([1, 1])
-with col_btn1:
-    search_clicked = st.button("Rechercher", type="primary", use_container_width=True)
-with col_btn2:
-    reset_clicked = st.button("Réinitialiser", use_container_width=True)
-
-if reset_clicked:
-    st.rerun()
-
-if search_clicked:
-    if not ref:
-        st.warning("Merci de saisir une référence de réclamation.")
-        st.stop()
-
-    data = fetch_reclamation_data(ref)
-    if not data:
-        st.error("Réclamation introuvable. Vérifiez la référence saisie.")
-        st.stop()
-
-    # Extraction champs (client-safe : pas de nom / compte affiché)
-    ref_out = clean_html_spaces(data.get("Réf. Réclamation"))
-    filiale = clean_html_spaces(data.get("Filiale"))
-    etat = clean_html_spaces(data.get("Etat"))
-    type_rec = clean_html_spaces(data.get("Type"))
-    activite = clean_html_spaces(data.get("Activité"))
-    motif = clean_html_spaces(data.get("Motif"))
-    objet = clean_html_spaces(data.get("Objet de la réclamation"))
-    caractere = clean_html_spaces(data.get("Caractère", ""))  # Nouveau champ
-    agence = clean_html_spaces(data.get("Agence"))
-    montant = clean_html_spaces(data.get("Montant"))
-    devise = clean_html_spaces(data.get("Dévise du montant"))
-
-    created = parse_date_fr_maybe(data.get("Date de création")) or "—"
-    updated = parse_date_fr_maybe(data.get("Date dernière modification")) or "—"
-
-    # normaliser statut
-    status = etat
-    if "en régularisation" in status.lower() or "en regularisation" in status.lower():
-        status = "En cours de régularisation"
-    if status not in STATUSES_ORDER:
-        # garde le statut tel quel, mais le workflow ne pourra pas le positionner précisément
-        pass
-
-    # workflow
-    steps = parse_workflow_from_sla(data.get("SLA Réclamation"))
-
-    st.divider()
-
-    # Section Informations sur la réclamation (au lieu de Résumé)
-    st.markdown("### 📋 Informations sur la réclamation")
+    # Créer les étoiles
+    for i in range(max_stars):
+        with cols[i]:
+            if st.button("★", key=f"star_{i}", 
+                        help=f"Noter {i+1} étoile{'s' if i+1 > 1 else ''}",
+                        use_container_width=True):
+                st.session_state.selected_stars = i + 1
     
-    # Mise en forme en carte
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+    # Afficher le nombre d'étoiles sélectionnées
+    rating = st.session_state.get('selected_stars', 0)
     
-    a, b, c = st.columns(3)
-    with a:
-        st.markdown("**Référence**")
-        st.markdown(f"**{ref_out or ref}**")
-        if filiale:
-            st.caption(f"Filiale : **{filiale}**")
-    with b:
-        st.markdown("**Date de création**")
-        st.write(created)
-        st.markdown("**Dernière mise à jour**")
-        st.write(updated)
-    with c:
-        st.markdown("**Statut actuel**")
-        st.markdown(pill_status(status), unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.divider()
-
-    # Détails essentiels (sans PII) - modifié selon l'image
-    st.markdown("### 📌 Détails")
-    
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    
-    d1, d2 = st.columns(2)
-    with d1:
-        st.write(f"**Type :** {type_rec or '—'}")
-        st.write(f"**Agence :** {agence or '—'}")
-        st.write(f"**Activité :** {activite or '—'}")
-        st.write(f"**Objet :** {objet or '—'}")
-    with d2:
-        st.write(f"**Motif :** {motif or '—'}")
-        # Caractère de la réclamation (affiché seulement si renseigné)
-        if caractere and caractere.strip():
-            st.write(f"**Caractère :** {caractere}")
-        if montant:
-            st.write(f"**Montant :** {montant} {devise}".strip())
+    # Afficher les étoiles visuellement
+    stars_html = ""
+    for i in range(max_stars):
+        if i < rating:
+            stars_html += '<span style="color: #ffc107; font-size: 24px;">★</span>'
         else:
-            st.write("**Montant :** —")
+            stars_html += '<span style="color: #e4e5e9; font-size: 24px;">★</span>'
     
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    st.divider()
-
-    # Workflow
-    render_workflow(status=status, steps=steps)
-
-    st.divider()
-
-    # Lien vers parcours client réclamation
-    st.markdown("### 🔗 Lien vers parcours client réclamation")
-    st.markdown(f"Pour plus d'informations, visitez : [https://particuliers.societegenerale.ci/fr/reclamation/](https://particuliers.societegenerale.ci/fr/reclamation/)")
+    st.markdown(f'<div style="text-align: center; margin: 10px 0;">{stars_html} ({rating}/5)</div>', 
+                unsafe_allow_html=True)
     
-    # Message conditionnel pour caractère "non fondé"
-    if caractere and "non fondé" in caractere.lower():
-        st.markdown(
-            '<div class="info-box">'
-            'Contactez votre gestionnaire de compte pour tout justificatif de caractère de la réclamation.'
-            '</div>',
-            unsafe_allow_html=True
+    return rating
+
+def save_feedback(reference: str, rating: int, comment: str = ""):
+    """Sauvegarde le feedback pour une réclamation."""
+    if reference not in st.session_state.feedback_data:
+        st.session_state.feedback_data[reference] = []
+    
+    feedback = {
+        'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'rating': rating,
+        'comment': comment
+    }
+    
+    st.session_state.feedback_data[reference].append(feedback)
+
+def get_average_rating(reference: str) -> float:
+    """Retourne la note moyenne pour une réclamation."""
+    if reference in st.session_state.feedback_data:
+        feedbacks = st.session_state.feedback_data[reference]
+        if feedbacks:
+            return sum(f['rating'] for f in feedbacks) / len(feedbacks)
+    return 0.0
+
+def render_timeline(status: str, steps_data: List[Dict[str, Any]]) -> None:
+    """Affiche une timeline interactive et visuelle des étapes."""
+    
+    # Définir l'ordre des statuts
+    STATUS_FLOW = [
+        "Initialisation",
+        "Etude Technique", 
+        "Traitement",
+        "Infos complémentaires",
+        "Attente retour tiers",
+        "En cours de régularisation",
+        "Valider Regularisation",
+        "Traitée",
+        "A Terminer",
+        "Résolue"
+    ]
+    
+    # Créer une liste des statuts disponibles dans cette réclamation
+    available_statuses = []
+    for step in STATUS_FLOW:
+        # Vérifier si ce statut existe dans les données
+        if any(step in s['step'] for s in steps_data) or step in status:
+            available_statuses.append(step)
+    
+    if not available_statuses:
+        st.warning("Aucune information de statut disponible.")
+        return
+    
+    # Déterminer l'index du statut actuel
+    current_index = -1
+    for i, stat in enumerate(available_statuses):
+        if stat in status or status in stat:
+            current_index = i
+            break
+    
+    # Créer la timeline avec Plotly
+    fig = go.Figure()
+    
+    # Ajouter les points de la timeline
+    x_positions = []
+    y_positions = []
+    colors = []
+    sizes = []
+    
+    for i, statut in enumerate(available_statuses):
+        x_positions.append(i)
+        y_positions.append(0)
+        
+        if i < current_index:
+            colors.append('#28a745')  # Complété
+            sizes.append(20)
+        elif i == current_index:
+            colors.append('#D50032')  # Actuel
+            sizes.append(25)
+        else:
+            colors.append('#dee2e6')  # Futur
+            sizes.append(15)
+    
+    # Ajouter les points
+    fig.add_trace(go.Scatter(
+        x=x_positions,
+        y=y_positions,
+        mode='markers',
+        marker=dict(
+            size=sizes,
+            color=colors,
+            line=dict(width=2, color='white')
+        ),
+        hoverinfo='text',
+        text=[f"<b>{statut}</b><br>Statut {'actuel' if i == current_index else 'terminé' if i < current_index else 'à venir'}" 
+              for i, statut in enumerate(available_statuses)],
+        textposition="bottom center"
+    ))
+    
+    # Ajouter les lignes de connexion
+    for i in range(len(x_positions)-1):
+        fig.add_trace(go.Scatter(
+            x=[x_positions[i], x_positions[i+1]],
+            y=[0, 0],
+            mode='lines',
+            line=dict(width=3, color='#D50032' if i < current_index else '#dee2e6'),
+            hoverinfo='none'
+        ))
+    
+    # Mise en page
+    fig.update_layout(
+        showlegend=False,
+        xaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            showticklabels=True,
+            tickmode='array',
+            tickvals=list(range(len(available_statuses))),
+            ticktext=available_statuses,
+            tickangle=45
+        ),
+        yaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False
+        ),
+        height=300,
+        margin=dict(l=20, r=20, t=40, b=80),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=12,
+            font_family="Inter"
         )
+    )
+    
+    # Afficher le graphique
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+    
+    # Légende
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown('<div style="display: flex; align-items: center; gap: 10px;">'
+                   '<div style="width: 15px; height: 15px; border-radius: 50%; background: #28a745;"></div>'
+                   '<span>Terminé</span></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown('<div style="display: flex; align-items: center; gap: 10px;">'
+                   '<div style="width: 15px; height: 15px; border-radius: 50%; background: #D50032; animation: pulse 2s infinite;"></div>'
+                   '<span>En cours</span></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown('<div style="display: flex; align-items: center; gap: 10px;">'
+                   '<div style="width: 15px; height: 15px; border-radius: 50%; background: #dee2e6;"></div>'
+                   '<span>À venir</span></div>', unsafe_allow_html=True)
 
-    # Section feedback si statut "A Terminer" ou "Résolue"
-    terminal_statuses = ["A Terminer", "Résolue"]
-    if status in terminal_statuses:
-        render_feedback_form(ref_out or ref)
+# =========================================================
+# DONNÉES SIMULÉES
+# =========================================================
+def fetch_reclamation_data(ref: str) -> Optional[Dict[str, Any]]:
+    """Récupère les données d'une réclamation."""
+    reclamations_db = {
+        "SGCI 3325G": {
+            "Réf. Réclamation": "SGCI 3325G",
+            "Date de création": "15-01-2025 10:30:00",
+            "Date dernière modification": "20-01-2025 14:15:00",
+            "Etat": "En cours de régularisation",
+            "Type": "Monetique",
+            "Activité": "Hôtel 648 56",
+            "Motif": "RETRAIT CONTESTE-NON RECONNU",
+            "Objet de la réclamation": "Hôtel 1080 central",
+            "Caractère": "En étude",
+            "Agence": "00111 PLATEAU",
+            "Montant": "10000",
+            "Dévise du montant": "XOF",
+            "SLA Réclamation": "[REC - Etude Technique:5h 20m 10s, REC - Traitement Back:1d 2h 30m 0s]",
+        },
+        "SGCI-338245": {
+            "Réf. Réclamation": "SGCI-338245",
+            "Date de création": "18-12-2024 13:16:36",
+            "Date dernière modification": "19-12-2024 11:00:00",
+            "Etat": "A Terminer",
+            "Type": "Monetique",
+            "Activité": "Retrait GAB SG",
+            "Motif": "RETRAIT CONTESTE-NON RECONNU",
+            "Objet de la réclamation": "Retrait DAB contesté",
+            "Caractère": "Non fondé",
+            "Agence": "00111-PLATEAU",
+            "Montant": "100000",
+            "Dévise du montant": "XOF",
+            "SLA Réclamation": "[REC - Etude Technique:10h 38m 16s, REC - Traitement Back:2d 10h 54m 1s]",
+        }
+    }
+    
+    # Essayer différentes variantes de la référence
+    variants = [ref, ref.upper(), ref.replace("-", " "), ref.replace(" ", "-")]
+    for variant in variants:
+        if variant in reclamations_db:
+            return reclamations_db[variant]
+    
+    return None
 
-    # Note client-safe
-    st.info("🔒 Pour protéger vos données, cette page n'affiche aucune information personnelle (nom, compte, téléphone).")
+# =========================================================
+# INTERFACE UTILISATEUR PRINCIPALE
+# =========================================================
 
-    # Debug POC optionnel
-    # with st.expander("🔍 Debug POC (optionnel)"):
-    #     st.write("Données complètes :", data)
+# Header avec logo et navigation
+st.markdown("""
+<div class="header-glass">
+    <div style="max-width: 1200px; margin: 0 auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 20px;">
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <img src="https://particuliers.societegenerale.ci/fileadmin/user_upload/logos/SGBCI103_2025.svg" 
+                     style="height: 50px;">
+                <div>
+                    <h1 style="margin: 0; color: #D50032; font-weight: 700;">Suivi de Réclamation</h1>
+                    <p style="margin: 5px 0 0 0; color: #6c757d;">Suivez l'avancement de votre réclamation en temps réel</p>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 14px; color: #6c757d;">Service Client</div>
+                <div style="font-size: 24px; font-weight: 800; color: #D50032;">27 20 20 10 10</div>
+            </div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Contenu principal
+st.markdown('<div class="fade-in">', unsafe_allow_html=True)
+
+# Section de recherche
+st.markdown("""
+<div class="card-neomorphic" style="max-width: 800px; margin: 0 auto;">
+    <h2 style="color: #212529; margin-bottom: 1.5rem; text-align: center;">🔍 Suivi de votre réclamation</h2>
+    <p style="text-align: center; color: #6c757d; margin-bottom: 2rem;">
+        Saisissez votre numéro de référence pour visualiser le statut de votre demande
+    </p>
+""", unsafe_allow_html=True)
+
+col1, col2, col3 = st.columns([2, 1, 1])
+with col1:
+    reference = st.text_input(
+        " ",
+        placeholder="Exemple : SGCI 3325G ou SGCI-338245",
+        key="search_input",
+        label_visibility="collapsed"
+    )
+
+with col2:
+    search_clicked = st.button("🔎 Rechercher", use_container_width=True)
+
+with col3:
+    if st.button("🔄 Nouvelle recherche", use_container_width=True):
+        st.rerun()
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# Affichage des résultats
+if search_clicked and reference:
+    st.session_state.current_reference = reference
+    
+    # Récupérer les données
+    data = fetch_reclamation_data(reference)
+    
+    if not data:
+        st.error("❌ Réclamation non trouvée. Vérifiez le numéro de référence.")
+        st.stop()
+    
+    # Extraire les données
+    ref_out = clean_html_spaces(data.get("Réf. Réclamation", reference))
+    created = parse_date_fr_maybe(data.get("Date de création")) or "Non disponible"
+    updated = parse_date_fr_maybe(data.get("Date dernière modification")) or "Non disponible"
+    etat = clean_html_spaces(data.get("Etat", "Non spécifié"))
+    type_rec = clean_html_spaces(data.get("Type", "Non spécifié"))
+    activite = clean_html_spaces(data.get("Activité", "Non spécifié"))
+    motif = clean_html_spaces(data.get("Motif", "Non spécifié"))
+    objet = clean_html_spaces(data.get("Objet de la réclamation", "Non spécifié"))
+    caractere = clean_html_spaces(data.get("Caractère", ""))
+    agence = clean_html_spaces(data.get("Agence", "Non spécifié"))
+    montant = clean_html_spaces(data.get("Montant", ""))
+    devise = clean_html_spaces(data.get("Dévise du montant", "XOF"))
+    
+    # Parser le workflow
+    sla_raw = data.get("SLA Réclamation", "")
+    steps = []
+    if sla_raw:
+        s = clean_html_spaces(sla_raw).strip("[]")
+        for item in s.split(","):
+            item = item.strip()
+            if ":" in item:
+                step, dur = item.split(":", 1)
+                step = step.replace("REC -", "").strip()
+                steps.append({"step": step, "duration": dur})
+    
+    # Afficher la carte de réclamation
+    st.markdown('<div class="fade-in">', unsafe_allow_html=True)
+    
+    # En-tête de la réclamation
+    st.markdown(f"""
+    <div class="card-neomorphic" style="margin-top: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1.5rem;">
+            <div>
+                <h2 style="color: #212529; margin: 0;">📋 Réclamation {ref_out}</h2>
+                <p style="color: #6c757d; margin: 5px 0 0 0;">
+                    Créée le {created} | Dernière mise à jour : {updated}
+                </p>
+            </div>
+            <div style="text-align: right;">
+                <div class="badge badge-primary" style="font-size: 14px; padding: 8px 16px;">
+                    {etat}
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Informations principales
+    col_a, col_b = st.columns(2)
+    
+    with col_a:
+        st.markdown("### 📄 Informations générales")
+        st.markdown(f"""
+        <div style="background: rgba(248, 249, 250, 0.5); padding: 1.5rem; border-radius: 12px; margin: 1rem 0;">
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+                <div style="font-weight: 600; color: #495057;">Type :</div>
+                <div>{type_rec}</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+                <div style="font-weight: 600; color: #495057;">Agence :</div>
+                <div>{agence}</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+                <div style="font-weight: 600; color: #495057;">Activité :</div>
+                <div>{activite}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_b:
+        st.markdown("### 📊 Détails spécifiques")
+        st.markdown(f"""
+        <div style="background: rgba(248, 249, 250, 0.5); padding: 1.5rem; border-radius: 12px; margin: 1rem 0;">
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+                <div style="font-weight: 600; color: #495057;">Objet :</div>
+                <div>{objet}</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px;">
+                <div style="font-weight: 600; color: #495057;">Motif :</div>
+                <div>{motif}</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+                <div style="font-weight: 600; color: #495057;">Montant :</div>
+                <div>{montant} {devise if montant else "Non spécifié"}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Caractère de la réclamation (conditionnel)
+    if caractere and caractere.strip():
+        st.markdown(f"""
+        <div style="background: rgba(213, 0, 50, 0.05); border-left: 4px solid #D50032; padding: 1rem; border-radius: 8px; margin: 1.5rem 0;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="font-weight: 600; color: #D50032;">Caractère de la réclamation :</div>
+                <div class="badge {'badge-warning' if 'non fondé' in caractere.lower() else 'badge-primary'}">
+                    {caractere}
+                </div>
+            </div>
+            {"<p style='color: #D50032; margin: 10px 0 0 0; font-size: 14px;'>Contactez votre gestionnaire de compte pour tout justificatif de caractère de la réclamation</p>" 
+             if 'non fondé' in caractere.lower() else ""}
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Timeline de suivi
+    st.markdown("""
+    <div class="card-neomorphic" style="margin-top: 2rem;">
+        <h2 style="color: #212529; margin-bottom: 1.5rem;">🔄 Suivi du traitement</h2>
+    """, unsafe_allow_html=True)
+    
+    render_timeline(etat, steps)
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Section Feedback (si statut terminal)
+    if etat in ["A Terminer", "Résolue", "Traitée"]:
+        avg_rating = get_average_rating(ref_out)
+        
+        st.markdown(f"""
+        <div class="card-neomorphic" style="margin-top: 2rem;">
+            <h2 style="color: #212529; margin-bottom: 1rem;">⭐ Évaluation du service</h2>
+            {"<p style='color: #28a745; margin-bottom: 1.5rem;'>✅ Vous avez déjà évalué ce service : " + 
+             "★" * int(avg_rating) + " (" + str(round(avg_rating, 1)) + "/5)</p>" if avg_rating > 0 else 
+             "<p style='color: #6c757d; margin-bottom: 1.5rem;'>Partagez votre expérience pour nous aider à améliorer notre service</p>"}
+        """, unsafe_allow_html=True)
+        
+        with st.form(key=f"feedback_form_{ref_out}"):
+            st.markdown("### Comment évaluez-vous le traitement de votre réclamation ?")
+            
+            # Étoiles interactives
+            rating = render_star_rating(5)
+            
+            # Commentaire
+            comment = st.text_area(
+                "Votre commentaire (optionnel)",
+                placeholder="Partagez vos remarques, suggestions ou expérience...",
+                height=100
+            )
+            
+            # Bouton de soumission
+            submit_col1, submit_col2 = st.columns([3, 1])
+            with submit_col2:
+                submitted = st.form_submit_button(
+                    "💾 Enregistrer mon avis",
+                    type="primary",
+                    use_container_width=True
+                )
+            
+            if submitted and rating > 0:
+                save_feedback(ref_out, rating, comment)
+                st.success("✅ Merci pour votre feedback ! Votre avis a été enregistré.")
+                st.balloons()
+                st.rerun()
+            elif submitted and rating == 0:
+                st.warning("Veuillez sélectionner une note avant de soumettre.")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    # Liens et informations supplémentaires
+    st.markdown("""
+    <div class="card-neomorphic" style="margin-top: 2rem;">
+        <h2 style="color: #212529; margin-bottom: 1.5rem;">📚 Ressources complémentaires</h2>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 1rem;">
+            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 1.5rem; border-radius: 12px;">
+                <h4 style="color: #212529; margin-top: 0;">🔗 Parcours client</h4>
+                <p style="color: #6c757d; font-size: 14px;">Accédez à votre espace client pour plus d'informations</p>
+                <a href="https://particuliers.societegenerale.ci/fr/reclamation/" 
+                   target="_blank" 
+                   style="color: #D50032; font-weight: 600; text-decoration: none; display: inline-block; margin-top: 10px;">
+                    Visiter l'espace client →
+                </a>
+            </div>
+            
+            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 1.5rem; border-radius: 12px;">
+                <h4 style="color: #212529; margin-top: 0;">📋 FAQ Réclamations</h4>
+                <p style="color: #6c757d; font-size: 14px;">Consultez les questions fréquentes sur les réclamations</p>
+                <a href="https://particuliers.societegenerale.ci/fr/faq/" 
+                   target="_blank" 
+                   style="color: #D50032; font-weight: 600; text-decoration: none; display: inline-block; margin-top: 10px;">
+                    Consulter la FAQ →
+                </a>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Carte de contact
+    st.markdown("""
+    <div class="contact-card">
+        <h3 style="color: white; margin-top: 0; margin-bottom: 1rem;">📞 Besoin d'assistance ?</h3>
+        <p style="color: rgba(255, 255, 255, 0.9); margin-bottom: 1.5rem;">
+            Notre équipe de conseillers est à votre écoute pour vous accompagner
+        </p>
+        <div class="phone-number">27 20 20 10 10</div>
+        <p style="color: rgba(255, 255, 255, 0.8); font-size: 14px; margin-top: 1rem;">
+            Du lundi au vendredi : 8h00 - 18h00 | Samedi : 9h00 - 13h00
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Footer
+st.markdown("""
+<div style="text-align: center; margin-top: 4rem; padding: 2rem 0; color: #6c757d; border-top: 1px solid #e9ecef;">
+    <p style="margin: 0;">© 2024 Société Générale Côte d'Ivoire. Tous droits réservés.</p>
+    <p style="margin: 10px 0 0 0; font-size: 14px;">
+        <a href="https://particuliers.societegenerale.ci/fr/mentions-legales/" 
+           style="color: #6c757d; text-decoration: none; margin: 0 10px;">Mentions légales</a> |
+        <a href="https://particuliers.societegenerale.ci/fr/confidentialite/" 
+           style="color: #6c757d; text-decoration: none; margin: 0 10px;">Confidentialité</a> |
+        <a href="https://particuliers.societegenerale.ci/fr/contact/" 
+           style="color: #6c757d; text-decoration: none; margin: 0 10px;">Contact</a>
+    </p>
+</div>
+""", unsafe_allow_html=True)
