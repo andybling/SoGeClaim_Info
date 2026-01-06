@@ -117,98 +117,89 @@ st.markdown("""
         box-shadow: 0 0 0 4px rgba(213, 0, 50, 0.1), inset 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     
-    /* Timeline Container */
+    /* TIMELINE EXACTEMENT COMME L'IMAGE */
     .timeline-container {
         position: relative;
-        padding: 50px 20px;
+        padding: 60px 0 40px 0;
         margin: 2rem 0;
     }
     
     .timeline-line {
         position: absolute;
-        top: 50%;
+        top: 40px;
         left: 50px;
         right: 50px;
-        height: 6px;
-        background: linear-gradient(90deg, #28a745 0%, #D50032 50%, #e9ecef 50%, #e9ecef 100%);
+        height: 3px;
+        background: #e9ecef;
         transform: translateY(-50%);
         z-index: 1;
-        border-radius: 3px;
-        overflow: hidden;
     }
     
     .timeline-progress {
         position: absolute;
-        top: 0;
-        left: 0;
-        height: 100%;
+        top: 40px;
+        left: 50px;
+        height: 3px;
         background: linear-gradient(90deg, #28a745, #D50032);
-        border-radius: 3px;
+        transform: translateY(-50%);
+        z-index: 2;
         transition: width 1.5s ease-in-out;
-        box-shadow: 0 0 20px rgba(213, 0, 50, 0.3);
     }
     
     .timeline-step {
         position: relative;
-        z-index: 2;
+        z-index: 3;
         text-align: center;
-        padding: 0 15px;
+        min-width: 150px;
     }
     
-    .timeline-bullet {
-        width: 40px;
-        height: 40px;
+    .timeline-point {
+        width: 20px;
+        height: 20px;
         border-radius: 50%;
-        background: white;
-        border: 4px solid #e9ecef;
+        background: #ffffff;
+        border: 3px solid #e9ecef;
         margin: 0 auto 15px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-        font-weight: 700;
-        color: #6c757d;
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         position: relative;
+        z-index: 4;
+        transition: all 0.4s ease;
+        box-shadow: 0 0 0 8px #ffffff;
     }
     
-    .timeline-bullet.completed {
-        background: linear-gradient(135deg, #28a745, #20c997);
+    .timeline-point.completed {
+        background: #28a745;
         border-color: #28a745;
-        color: white;
-        box-shadow: 0 0 0 10px rgba(40, 167, 69, 0.15), 0 4px 12px rgba(40, 167, 69, 0.3);
-        transform: scale(1.1);
+        box-shadow: 0 0 0 8px #ffffff, 0 0 0 12px rgba(40, 167, 69, 0.2);
     }
     
-    .timeline-bullet.active {
-        background: linear-gradient(135deg, #FF1654, #D50032);
+    .timeline-point.active {
+        background: #D50032;
         border-color: #D50032;
-        color: white;
-        box-shadow: 0 0 0 12px rgba(213, 0, 50, 0.2), 0 4px 20px rgba(213, 0, 50, 0.4);
-        animation: pulse 2s infinite;
-        transform: scale(1.2);
+        box-shadow: 0 0 0 8px #ffffff, 0 0 0 12px rgba(213, 0, 50, 0.2);
+        animation: point-pulse 2s infinite;
     }
     
-    .timeline-bullet.pending {
-        background: white;
+    .timeline-point.pending {
+        background: #ffffff;
         border-color: #e9ecef;
-        color: #adb5bd;
     }
     
-    @keyframes pulse {
-        0%, 100% { 
-            box-shadow: 0 0 0 12px rgba(213, 0, 50, 0.2), 0 4px 20px rgba(213, 0, 50, 0.4);
+    @keyframes point-pulse {
+        0% {
+            box-shadow: 0 0 0 8px #ffffff, 0 0 0 12px rgba(213, 0, 50, 0.2);
         }
-        50% { 
-            box-shadow: 0 0 0 20px rgba(213, 0, 50, 0.1), 0 4px 20px rgba(213, 0, 50, 0.4);
+        50% {
+            box-shadow: 0 0 0 8px #ffffff, 0 0 0 16px rgba(213, 0, 50, 0.1);
+        }
+        100% {
+            box-shadow: 0 0 0 8px #ffffff, 0 0 0 12px rgba(213, 0, 50, 0.2);
         }
     }
     
     .timeline-label {
         font-size: 14px;
         font-weight: 600;
-        color: #495057;
+        color: #6c757d;
         margin-top: 10px;
         line-height: 1.4;
         transition: all 0.3s ease;
@@ -217,11 +208,40 @@ st.markdown("""
     .timeline-label.active {
         color: #D50032;
         font-weight: 700;
-        transform: translateY(-2px);
     }
     
     .timeline-label.completed {
         color: #28a745;
+    }
+    
+    .timeline-number {
+        position: absolute;
+        top: -30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ffffff;
+        border: 2px solid #e9ecef;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 14px;
+        color: #6c757d;
+    }
+    
+    .timeline-number.completed {
+        background: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+    
+    .timeline-number.active {
+        background: #D50032;
+        border-color: #D50032;
+        color: white;
     }
     
     /* Star Rating System */
@@ -457,26 +477,66 @@ st.markdown("""
         }
     }
     
-    /* Status Colors */
-    .status-dot {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        margin-right: 8px;
-        vertical-align: middle;
+    /* Progress Text */
+    .progress-text {
+        text-align: center;
+        margin: 2rem 0;
+        padding: 1.5rem;
+        background: linear-gradient(145deg, #ffffff, #f8f9fa);
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
     }
     
-    .status-active { background: #D50032; }
-    .status-completed { background: #28a745; }
-    .status-pending { background: #e9ecef; }
+    .progress-percentage {
+        font-size: 3.5rem;
+        font-weight: 900;
+        color: #D50032;
+        margin: 0.5rem 0;
+        text-shadow: 0 4px 12px rgba(213, 0, 50, 0.2);
+    }
     
-    /* Grid Layout */
-    .grid-2-col {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 24px;
-        margin: 2rem 0;
+    .progress-info {
+        color: #6c757d;
+        font-size: 14px;
+        margin-top: 0.5rem;
+    }
+    
+    /* Status Legend */
+    .status-legend {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        margin-top: 2rem;
+        flex-wrap: wrap;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .legend-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 3px solid #ffffff;
+        box-shadow: 0 0 0 1px currentColor;
+    }
+    
+    .legend-dot.completed {
+        background: #28a745;
+        color: #28a745;
+    }
+    
+    .legend-dot.active {
+        background: #D50032;
+        color: #D50032;
+    }
+    
+    .legend-dot.pending {
+        background: #ffffff;
+        color: #e9ecef;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -538,10 +598,10 @@ def get_average_rating(reference: str) -> Tuple[float, int]:
             return total / len(feedbacks), len(feedbacks)
     return 0.0, 0
 
-def render_timeline_progress(status: str, steps_data: List[Dict[str, Any]]):
-    """Affiche une timeline de progression professionnelle"""
+def render_timeline_like_image(status: str, steps_data: List[Dict[str, Any]]):
+    """Affiche une timeline exactement comme sur l'image avec points et ligne"""
     
-    # Ordre des statuts définitif
+    # Ordre des statuts
     STATUS_FLOW = [
         "Initialisation",
         "Etude Technique", 
@@ -575,49 +635,51 @@ def render_timeline_progress(status: str, steps_data: List[Dict[str, Any]]):
     # Calcul du pourcentage de progression
     progress_pct = ((current_index + 1) / len(available_statuses)) * 100 if current_index >= 0 else 0
     
-    # Créer la timeline HTML
+    # Créer la timeline HTML exactement comme sur l'image
     timeline_html = f"""
     <div class="timeline-container">
-        <div class="timeline-line">
-            <div class="timeline-progress" style="width: {progress_pct}%"></div>
-        </div>
-        <div style="display: flex; justify-content: space-between; position: relative; z-index: 2;">
+        <div class="timeline-line"></div>
+        <div class="timeline-progress" style="width: calc({progress_pct}% - 100px);"></div>
+        <div style="display: flex; justify-content: space-between; position: relative; z-index: 3; margin: 0 30px;">
     """
     
     for i, step in enumerate(available_statuses):
-        bullet_class = "pending"
+        point_class = "pending"
         label_class = ""
+        number_class = ""
         
         if i < current_index:
-            bullet_class = "completed"
+            point_class = "completed"
             label_class = "completed"
-            icon = "✓"
+            number_class = "completed"
+            number = "✓"
         elif i == current_index:
-            bullet_class = "active"
+            point_class = "active"
             label_class = "active"
-            icon = "⏳"
+            number_class = "active"
+            number = str(i + 1)
         else:
-            bullet_class = "pending"
-            icon = f"{i+1}"
+            point_class = "pending"
+            number = str(i + 1)
         
         timeline_html += f"""
             <div class="timeline-step">
-                <div class="timeline-bullet {bullet_class}">{icon}</div>
+                <div class="timeline-number {number_class}">{number}</div>
+                <div class="timeline-point {point_class}"></div>
                 <div class="timeline-label {label_class}">{step}</div>
             </div>
         """
     
     timeline_html += "</div></div>"
     
-    # Affichage de la progression
+    # Afficher la progression
     st.markdown(f"""
-    <div style="text-align: center; margin: 2rem 0;">
-        <h3 style="color: #495057; margin-bottom: 1rem;">Progression du traitement</h3>
-        <div style="font-size: 3rem; font-weight: 800; color: #D50032; margin: 1rem 0;">
-            {int(progress_pct)}%
-        </div>
-        <div style="color: #6c757d; font-size: 14px;">
+    <div class="progress-text fade-in">
+        <h3 style="color: #495057; margin-bottom: 1rem; font-weight: 700;">Progression du traitement</h3>
+        <div class="progress-percentage">{int(progress_pct)}%</div>
+        <div class="progress-info">
             {current_index + 1} sur {len(available_statuses)} étapes complétées
+            {f"• Statut actuel : <strong style='color: #D50032;'>{available_statuses[current_index] if current_index >= 0 else 'Non déterminé'}</strong>" if current_index >= 0 else ""}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -626,18 +688,18 @@ def render_timeline_progress(status: str, steps_data: List[Dict[str, Any]]):
     
     # Légende
     st.markdown("""
-    <div style="display: flex; justify-content: center; gap: 30px; margin-top: 2rem; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="timeline-bullet completed" style="width: 20px; height: 20px; margin: 0;">✓</div>
+    <div class="status-legend">
+        <div class="legend-item">
+            <div class="legend-dot completed"></div>
             <span style="color: #28a745; font-weight: 600;">Terminé</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="timeline-bullet active" style="width: 20px; height: 20px; margin: 0; animation: none;">⏳</div>
+        <div class="legend-item">
+            <div class="legend-dot active"></div>
             <span style="color: #D50032; font-weight: 600;">En cours</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <div class="timeline-bullet pending" style="width: 20px; height: 20px; margin: 0;">•</div>
-            <span style="color: #adb5bd; font-weight: 600;">À venir</span>
+        <div class="legend-item">
+            <div class="legend-dot pending"></div>
+            <span style="color: #6c757d; font-weight: 600;">À venir</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -945,7 +1007,7 @@ if search_clicked and reference:
     
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # Section Suivi du traitement avec timeline
+    # Section Suivi du traitement avec timeline exactement comme l'image
     st.markdown("""
     <div class="card-neo fade-in">
         <h2 style="color: #212529; margin-bottom: 2.5rem; font-weight: 800; font-size: 24px; display: flex; align-items: center; gap: 12px;">
@@ -953,7 +1015,7 @@ if search_clicked and reference:
         </h2>
     """, unsafe_allow_html=True)
     
-    render_timeline_progress(etat, steps)
+    render_timeline_like_image(etat, steps)
     
     st.markdown("</div>", unsafe_allow_html=True)
     
